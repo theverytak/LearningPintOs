@@ -59,6 +59,7 @@ process_execute (const char *file_name)
   tid = thread_create (prog_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+	palloc_free_page(fn_for_tokenize);
   return tid;
 }
 
@@ -98,6 +99,7 @@ start_process (void *file_name_)
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
+	palloc_free_page (fn_for_tokenize);
   if (!success) 
     thread_exit ();
 
@@ -507,7 +509,8 @@ argument_stack(char **parse ,int count ,void **esp)
 {
 	char *prog_n_arg = *parse;
 	char *token, *save_ptr;  // for strtok_r
-	int i = 0, j = 0;				// for for loop;
+	int i = 0;				// for for loop;
+	// int j = 0;				// 한 글자씩 스택에 넣는 경우에 필요함.
 	// token_array is for tokens
 	// token_distance is the address distance 
 	void *top_of_command;
@@ -515,7 +518,6 @@ argument_stack(char **parse ,int count ,void **esp)
 	int *token_distance = (int*)malloc(sizeof(int) * count);
 	
 	*esp -= strlen((char*)*parse) + 1;
-	printf("strlen(parse) : %d\n", strlen((char*)*parse));
 	// save the tokens to the token_array
 	for (token = strtok_r (prog_n_arg, " ", &save_ptr); token != NULL;
 			token = strtok_r (NULL, " ", &save_ptr)) {
@@ -526,17 +528,18 @@ argument_stack(char **parse ,int count ,void **esp)
 	}
 	
 //	assert(count == sizeof(token_array) / sizeof(token_array[0]));
-	/* 한 단어씩 넣으려고 했는데 왜 안들어가는지 모르겠다.
+
+	// 아래는 한 단어씩 넣는 방법임. 처음에 했는데 안됐다가 다시
+	// 하니까 됨. 문제는 아래 strlcpy함수에서 마지막 인자로 
+	// strlen(token_array[i]) + 1이 아니라
+	// strlen(token_array[i] + 1)을 넣었었음. 
+  top_of_command = *esp;
 	for(i = 0; i < count; i++) {
-		//(char*)(*esp) = token_array[i]; 
-		strlcpy((char*)(*esp), token_array[i], strlen(token_array[i] + 1));
-		printf("esp is here : %p\n", *esp);
-		printf("esp : %s", (char*)(*esp));
-		printf("token : %s", token_array[i]);
+		strlcpy((char*)(*esp), token_array[i], strlen(token_array[i]) + 1);
 		*esp += strlen(token_array[i]) + 1;			// considering '\0'
 	}
-	***************** */
-
+	//참고로 아래는 한 글자씩 넣는 방법을 사용함. 
+/*
   top_of_command = *esp;
 	for(i = 0; i < count; i++) {
 		for(j = 0; j < strlen(token_array[i]); j++) {
@@ -546,15 +549,13 @@ argument_stack(char **parse ,int count ,void **esp)
 		}
 		*esp += 1;		// considering '\0'
 	}
-
+*/
 	*esp = (int)top_of_command;		// move esp back;
 
 	// if esp % 4 != 0, adjust it
-//	if(0 != (int)(*esp) % 4)
-//		*esp -= (int)(*esp) % 4;
-          
+	if(0 != ((int)PHYS_BASE - (int)(*esp)) % 4)
+		*esp -= 4 - (((int)PHYS_BASE - (int)(*esp)) % 4);
 
-	*esp -= ((int)(*esp)%4<0? (int)(*esp)%4+4 : (int)(*esp)%4);
 	//이건 왜 하는건지 모르겠는데 pdf에 나와있어서 일단 함.
 	// ***************
 	// 나중에 질문해야함
