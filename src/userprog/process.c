@@ -518,6 +518,10 @@ argument_stack(char **parse ,int count ,void **esp)
 	char **token_array = (char**)malloc(sizeof(char*) * count);
 	int *token_distance = (int*)malloc(sizeof(int) * count);
 	
+	// memory allocation check
+	if(token_array == NULL || token_distance == NULL)
+    return TID_ERROR;
+
 	// move esp back before the parse changes
 	*esp -= strlen((char*)*parse) + 1;
 
@@ -526,6 +530,8 @@ argument_stack(char **parse ,int count ,void **esp)
 			token = strtok_r (NULL, " ", &save_ptr)) {
 		token_distance[i] = token - prog_n_arg;
 		token_array[i] = (char*)malloc(sizeof(char) * strlen(token));
+		if(token_array[i] == NULL)
+			return TID_ERROR;
     strlcpy (token_array[i], token, strlen(token) + 1);
 		i++;
 	}
