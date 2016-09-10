@@ -15,6 +15,7 @@
 #include "threads/init.h"
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
@@ -517,7 +518,9 @@ argument_stack(char **parse ,int count ,void **esp)
 	char **token_array = (char**)malloc(sizeof(char*) * count);
 	int *token_distance = (int*)malloc(sizeof(int) * count);
 	
+	// move esp back before the parse changes
 	*esp -= strlen((char*)*parse) + 1;
+
 	// save the tokens to the token_array
 	for (token = strtok_r (prog_n_arg, " ", &save_ptr); token != NULL;
 			token = strtok_r (NULL, " ", &save_ptr)) {
@@ -550,9 +553,10 @@ argument_stack(char **parse ,int count ,void **esp)
 		*esp += 1;		// considering '\0'
 	}
 */
-	*esp = (int)top_of_command;		// move esp back;
 
-	// if esp % 4 != 0, adjust it
+	*esp = top_of_command;		// move esp back;
+
+	// from PHYS_BASE to esp, it should be multiple of 4 
 	if(0 != ((int)PHYS_BASE - (int)(*esp)) % 4)
 		*esp -= 4 - (((int)PHYS_BASE - (int)(*esp)) % 4);
 
@@ -566,7 +570,7 @@ argument_stack(char **parse ,int count ,void **esp)
 	// save the address of arguments on the stack which were already put
 	for(i = count - 1; i >= 0; i--) {
 		*esp -= 4;		// size of pointer is 4
-		*(void**)(*esp) = top_of_command + token_distance[i];
+		*(char**)(*esp) = top_of_command + token_distance[i];
 	}
 
   *esp -= 4;
