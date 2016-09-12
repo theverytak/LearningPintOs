@@ -582,6 +582,7 @@ argument_stack(char **parse ,int count ,void **esp)
   *esp -= 4;
 	*(char**)(*esp) = (*esp +4);
 
+	// argc
 	*esp -= 4;
 	*(int*)(*esp) = count;
 
