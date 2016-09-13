@@ -566,19 +566,18 @@ argument_stack(char **parse ,int count ,void **esp)
 	if(0 != ((int)PHYS_BASE - (int)(*esp)) % 4)
 		*esp -= 4 - (((int)PHYS_BASE - (int)(*esp)) % 4);
 
-	//이건 왜 하는건지 모르겠는데 pdf에 나와있어서 일단 함.
-	// ***************
-	// 나중에 질문해야함
-	// *************
+	// insert null
 	*esp -= 4;
 	*(int*)(*esp) = 0;
 
-	// save the address of arguments on the stack which were already put
+	// save the address of arguments on the stack which were already pushed in the
+	// stack ex) in the case of 'echo x y z' (argv + 0) ~ (argv + 3)
 	for(i = count - 1; i >= 0; i--) {
 		*esp -= 4;		// size of pointer is 4
 		*(char**)(*esp) = top_of_command + token_distance[i];
 	}
 
+	// **argv
   *esp -= 4;
 	*(char**)(*esp) = (*esp +4);
 
@@ -598,6 +597,7 @@ argument_stack(char **parse ,int count ,void **esp)
 	free(token_array);
 }
 
+// return the number of arguments
 int
 count_argument(const char *file_name)
 {
