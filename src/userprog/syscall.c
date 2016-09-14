@@ -86,7 +86,8 @@ syscall_handler (struct intr_frame *f UNUSED)
 void 
 check_address(void *addr) //이번에 구현할 함수.
 {
-	if((int)addr <= 0x804800 || (int)addr >= 0x0000000)
+	uint32_t address = (uint32_t)addr;
+	if(address <= 0x8048000 || address >= 0xc0000000)
 		exit(-1);
 }
 
