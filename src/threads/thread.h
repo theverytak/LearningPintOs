@@ -144,5 +144,5 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 struct thread* get_child_process(tid_t tid);
-
+void remove_child_process(struct thread *cp);
 #endif /* threads/thread.h */

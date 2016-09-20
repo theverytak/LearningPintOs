@@ -12,7 +12,7 @@ static void halt(void);
 static void exit(int status);
 static bool create(const char *file , unsigned initial_size);
 static bool remove(const char *file);
-
+pid_t exec(const char *cmd_line);
 void
 syscall_init (void) 
 {
@@ -136,4 +136,15 @@ bool
 remove(const char *file)
 {
 	return filesys_remove(file);
+}
+
+pid_t 
+exec(const char *cmd_line)
+{
+	process_execute(cmd_line);
+
+
+
+
+
 }

@@ -651,5 +651,13 @@ init_thread(struct thread *t, const char *name, int priority)
 }
 
 
+// remove cp from childs, which is a list of child owned by parent thread.
+void
+remove_child_process(struct thread *cp)
+{
+  list_remove(cp);
+	free(cp);
+}
+
 
 

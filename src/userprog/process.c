@@ -53,8 +53,8 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_for_tokenize, file_name, PGSIZE);
 
-// 일단 여기서 파싱을 했음. 위에서 선언된 prog_name, save_ptr을 이용했음.
-// 첫 번째 토큰인 프로그램 이름(ex. "echo")을 뽑는다. 나머지 인자들은 어떻게 해야 할 지 모르겠음.
+// 여기서 파싱을 했음. 위에서 선언된 prog_name, save_ptr을 이용했음
+// 첫 번째 토큰인 프로그램 이름(ex. "echo")을 뽑는다. 
 	prog_name = strtok_r(fn_for_tokenize, " ", &save_ptr);
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (prog_name, PRI_DEFAULT, start_process, fn_copy);
@@ -66,6 +66,9 @@ process_execute (const char *file_name)
 
 /* A thread function that loads a user process and starts it
    running. */
+// file_name_안에 는 예를 들어 echo x y z가 들어있음.
+// 아래 함수에서는 그 것들을 쪼개서 스택위에 인자들을 올리고 <- load
+// 실제로 그 프로그램을 실행함.
 static void
 start_process (void *file_name_)
 {
