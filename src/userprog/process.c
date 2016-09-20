@@ -615,4 +615,3 @@ count_argument(const char *file_name)
 
 	return count;
 }
-
