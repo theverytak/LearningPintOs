@@ -4,7 +4,6 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -92,15 +91,22 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-
+	  struct thread* parent; 						  // 부모를 향한 포인터
+		struct list_elem me_as_child;			  // 나의 부모의 list에 들어가기 위하여
+		struct list childs;									// 나의 자식들을 위한 list
+		bool is_loaded;											// 메로리 탑재 유무
+		bool is_ended;											// 종료 유무
+		struct semaphore sema_exit;					// exit semaphore
+		struct semaphore sema_load;					// load semaphore
+		bool exit_status;										// exit status when exit() called;
 #ifdef USERPROG
-    /* Owned by userprog/process.c. */
+		/* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
 #endif
 
     /* Owned by thread.c. */
-    unsigned magic;                     /* Detects stack overflow. */
-  };
+		unsigned magic;                     /* Detects stack overflow. */
+	};
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -137,5 +143,6 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+struct thread* get_child_process(tid_t tid);
 
 #endif /* threads/thread.h */

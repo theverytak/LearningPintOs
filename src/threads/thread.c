@@ -20,6 +20,8 @@
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
 
+// 프로세스 디스크립터를 초기화함.
+static void init_thread(struct thread *t, const char *name, int priority);
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
@@ -205,6 +207,19 @@ thread_create (const char *name, int priority,
   sf->ebp = 0;
 
   intr_set_level (old_level);
+
+		
+	// 나의 부모를 찾아 저장
+	t->parent = thread_current();
+	// 메모리 탑재안됨, 프로세스 종료 안됨.
+	is_loaded = false;
+	is_ended = false;
+	// semaphore모두 초기화
+	sema_init(&sema_exit, 0);
+	sema_init(&sema_load, 0);
+
+	// 나를 나의 부모의 자식으로 인정받는 과정. 
+	list_push_back(t->parent->childs, t->me_as_child);
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -585,3 +600,56 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+
+struct
+thread* get_child_process(tid_t tid)
+{
+	// 임의의 struct thread를 가리키는 포인터 하나 선언.
+	struct thread* t;
+	// for문을 돌면서 내가 원하는 자식 스레드를 검색할 놈을 선언.
+	struct list_elem *e;
+	// 나의 자식 리스트를 검색함. pid를 가지는 놈 선별.
+	// 아래 코드는 list_entry의 예제를 그대로 사용함. 
+	for(e = list_begin(&thread_current()->childs); 
+			e!= list_end(&thread_current()->childs);
+			e = list_next(e))
+		{
+			t = list_entry(e, struct thread, me_as_child);
+			if(t->tid == tid)
+				return t;
+		}
+
+	// not found a thread w/ tid
+	return NULL;
+}
+
+
+// initialize a thread t, with name and priority
+// other value will just set to 0 or null
+// semaphore initializing happens at thread_create
+static void 
+init_thread(struct thread *t, const char *name, int priority)
+{
+
+  memset(t, 0, sizeof *t);
+  t->status = THREAD_BLOCKED;
+  strlcpy (t->name, name, sizeof t->name);
+  t->stack = (uint8_t *) t + PGSIZE;
+  t->priority = priority;
+  t->magic = THREAD_MAGIC;
+  list_push_back (&all_list, &t->allelem);
+
+	elem->prev = NULL;
+	elem->next = NULL;
+
+	me_as_child->prev = NULL;
+	me_as_child->next = NULL;
+
+	list_init(&child);
+
+}
+
+
+
+
