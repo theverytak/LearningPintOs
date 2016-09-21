@@ -75,6 +75,7 @@ start_process (void *file_name_)
   char *file_name = file_name_;
 	char *prog_name, *save_ptr, *fn_for_tokenize;
   struct intr_frame if_;
+	struct thread *t;
   bool success;
 	// count는 argument_stack함수에 넣을 변수인데, count_argument라는 함수를 만들어서
 	// 인자 수를 세고 초기화 한다. 예를들어, file_name이 "echo x y"라면, 3을 카운트에 넣는다.
@@ -98,14 +99,31 @@ start_process (void *file_name_)
 // load함수 호출 후 argument_stack 호출함.
 	prog_name = strtok_r(fn_for_tokenize, " ", &save_ptr);
   success = load (prog_name, &if_.eip, &if_.esp);
+
+	// load성공 여부에 따라 스레드 디스크립터 내의 load플래그 전환.
+	t = thread_current();
+	t->is_loaded = success ? true : false ;
+	
+	// 부모를 깨워도 됩니다. load함수가 끝났고, load플래그도 잘 섰기 때문에.
+	sema_up(&t->sema_load);
+
+	// 프로세스 실행을 위해 필요한 인자들을 스택에 쌓는다.
 	argument_stack(&file_name, count, &if_.esp);
+
+	/* *********************************
+	   아래 함수는 디버깅 하기 위해 선언했읍니다.
+		 나중에 지워주시기 바랍니다.
+		 ********************************** */
 	hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
 
-  /* If load failed, quit. */
+	// palloc 했던 아이들을 삭제합니다.
   palloc_free_page (file_name);
 	palloc_free_page (fn_for_tokenize);
-  if (!success) 
+
+  /* If load failed, quit. */
+  if (!success) { 
     thread_exit ();
+	}
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in

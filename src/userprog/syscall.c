@@ -33,6 +33,15 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 	check_address(esp);
 
+	/*  ****************************************************************
+		아래는 시스템컬 핸들러 테이블 없이 시스템컬 넘버에 따라 알맞은 시스템
+		콜을 불러오는 코드입니다.
+		어떤 시스템컬이 호출되었는지 잘 알 수 있도록 printf구문을 모든 case의 
+		시작에 넣었습니다.
+		대부분 메커니즘은 비슷합니다. 
+		check_address는 인자로 넘어온 포인터의 주소값이 유효한지 검사하며,
+		시스템컬에 리턴값이 있다면 그 리턴값은 f->eax에 넣어줍니다.
+		 **************************************************************** */
 	switch(sys_n)
 	{
 		case SYS_HALT :                   /* Halt the operating system. */
@@ -48,7 +57,14 @@ syscall_handler (struct intr_frame *f UNUSED)
 				exit(arg[0]);
 				break;
 			}
-		// case SYS_EXEC :                  /* Start another process. */
+		 case SYS_EXEC :                  /* Start another process. */
+			{
+				printf("exec() called\n");
+				get_argument(esp, arg, 1);
+				check_address((void *)arg[0]);		// arg[0]이 유효한 주소영역인지 검사.
+				f->eax = exec((const char *)arg[0]);
+				break;
+			}
 		// case SYS_WAIT :                  /* Wait for a child process to die. */
 		case SYS_CREATE :                /* Create a file. */
 			{
@@ -79,12 +95,12 @@ syscall_handler (struct intr_frame *f UNUSED)
   thread_exit ();
 }
 
-// addr이 유효한 주소인지 확인.0x804800에서 0x0000000사이이면 유저영역임.
-// 경계는 제외.
-// esp만 검사할 때 뿐만 아니라 예를들어 인자로 포인터를 받아온 경우에도
-// 아래 함수를 사용가능.
+/* addr이 유효한 주소인지 확인.0x804800에서 0x0000000사이이면 유저영역임.
+ 경계는 제외.
+ esp를 검사할 때 뿐만 아니라 예를들어 인자로 포인터를 받아온 경우에도
+ 아래 함수를 사용가능. */
 void 
-check_address(void *addr) //이번에 구현할 함수.
+check_address(void *addr) 
 {
 	uint32_t address = (uint32_t)addr;
 	if(address <= 0x8048000 || address >= 0xc0000000)
@@ -141,10 +157,18 @@ remove(const char *file)
 pid_t 
 exec(const char *cmd_line)
 {
-	process_execute(cmd_line);
+	/* cmd_line을 수행하는 새로운 프로세스를 생성한다.
+		 해당 프로세스는 자식 프로세스이며, thread* t는
+		 그 스레드를 가리킨다. */
+  struct thread *t = get_child_process(process_execute(cmd_line));
+  // 자식이 load할 때 까지 기다림.
+	// sema_up은 자식의 load함수 수행 후 할 예정임.
+  sema_down(&t->sema_load); 
 
-
-
-
-
+	// 자식이 load에 성공했다면, 자식의 tid를 리턴
+	if(t->is_loaded)
+		return t->tid;
+	// 실패했다면 슬프지만 -1리턴.
+	else
+		return -1;
 }
