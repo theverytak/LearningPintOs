@@ -10,6 +10,7 @@
 static void syscall_handler (struct intr_frame *f UNUSED);
 static void halt(void);
 static void exit(int status);
+static int wait(tid_t tid);
 static bool create(const char *file , unsigned initial_size);
 static bool remove(const char *file);
 pid_t exec(const char *cmd_line);
@@ -57,7 +58,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 				exit(arg[0]);
 				break;
 			}
-		 case SYS_EXEC :                  /* Start another process. */
+		case SYS_EXEC :                  /* Start another process. */
 			{
 				printf("exec() called\n");
 				get_argument(esp, arg, 1);
@@ -65,7 +66,13 @@ syscall_handler (struct intr_frame *f UNUSED)
 				f->eax = exec((const char *)arg[0]);
 				break;
 			}
-		// case SYS_WAIT :                  /* Wait for a child process to die. */
+		case SYS_WAIT :                  /* Wait for a child process to die. */
+			{
+				printf("wait() called\n");
+				get_argument(esp, arg, 1);
+				f->eax = wait((tid_t)arg[0]);
+				break;
+			}
 		case SYS_CREATE :                /* Create a file. */
 			{
 				printf("create() called\n");
@@ -172,3 +179,13 @@ exec(const char *cmd_line)
 	else
 		return -1;
 }
+
+int 
+wait(tid_t tid)
+{
+	return process_wait(tid);
+}
+
+
+
+

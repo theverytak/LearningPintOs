@@ -147,7 +147,27 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+
+	/* 자식 프로세스의 프로세스 디스크립터 검색(tid사용)
+		 예외 발생시(TID_ERROR == tid) -1 리턴
+		 자식 프로세스가 종료될 때 까지 세마포어 이용해서 대기
+		 자식프로세스 디스크립터 삭제
+		 자식 프로세스의 exit status 리턴
+		 */
+	// 자식 프로세스를 tid를 이용해 찾음.
+	struct thread *child = get_child_process(tid);
+
+	// 만약 tid로 자식 프로세스 검색에 실패했다면, -1리턴
+	if(NULL == child)
+		return -1
+
+	// 자식 프로세스의 종료를 기다림
+	sema_down(&child->sema_exit);	
+	
+	// 자식 프로세스를 나의 자식 리스트에서 삭제함.
+	list_remove(&child->me_as_child);
+
+	return child->exit_status;
 }
 
 /* Free the current process's resources. */

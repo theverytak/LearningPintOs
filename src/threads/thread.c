@@ -10,6 +10,7 @@
 #include "threads/palloc.h"
 #include "threads/switch.h"
 #include "threads/synch.h"
+#include "threads/thread.h"
 #include "threads/vaddr.h"
 #ifdef USERPROG
 #include "userprog/process.h"
@@ -20,8 +21,6 @@
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
 
-// 프로세스 디스크립터를 초기화함.
-static void init_thread(struct thread *t, const char *name, int priority);
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
@@ -212,14 +211,14 @@ thread_create (const char *name, int priority,
 	// 나의 부모를 찾아 저장
 	t->parent = thread_current();
 	// 메모리 탑재안됨, 프로세스 종료 안됨.
-	is_loaded = false;
-	is_ended = false;
+	t->is_loaded = false;
+	t->is_ended = false;
 	// semaphore모두 초기화
-	sema_init(&sema_exit, 0);
-	sema_init(&sema_load, 0);
+	sema_init(&t->sema_exit, 0);
+	sema_init(&t->sema_load, 0);
 
-	// 나를 나의 부모의 자식으로 인정받는 과정. 
-	list_push_back(t->parent->childs, t->me_as_child);
+	// 나를 나의 부모의 자식리스트에 넣는다. 
+	list_push_back(&t->parent->childs, &t->me_as_child);
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -309,11 +308,20 @@ thread_exit (void)
   process_exit ();
 #endif
 
+	struct thread *t = thread_current();
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
-  list_remove (&thread_current()->allelem);
+  list_remove (&t->allelem);
+
+	// 프로세스 디스크립터에 프로세스 종료를 알림
+	t->is_ended = true;
+	// 부모 프로세스의 상태를 대기에서 준비로 바꿈.
+	t->parent->status = THREAD_READY;
+	//	 부모프로세스는 대기상태를 이탈(세마업) 
+	sema_up(&t->sema_exit);
+	// 나의 상태를 죽음으로 변경
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -485,6 +493,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
+
+	t->elem.prev = NULL;
+	t->elem.next = NULL;
+
+	t->me_as_child.prev = NULL;
+	t->me_as_child.next = NULL;
+
+	list_init(&t->childs);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -624,40 +640,11 @@ thread* get_child_process(tid_t tid)
 	return NULL;
 }
 
-
-// initialize a thread t, with name and priority
-// other value will just set to 0 or null
-// semaphore initializing happens at thread_create
-static void 
-init_thread(struct thread *t, const char *name, int priority)
-{
-
-  memset(t, 0, sizeof *t);
-  t->status = THREAD_BLOCKED;
-  strlcpy (t->name, name, sizeof t->name);
-  t->stack = (uint8_t *) t + PGSIZE;
-  t->priority = priority;
-  t->magic = THREAD_MAGIC;
-  list_push_back (&all_list, &t->allelem);
-
-	elem->prev = NULL;
-	elem->next = NULL;
-
-	me_as_child->prev = NULL;
-	me_as_child->next = NULL;
-
-	list_init(&child);
-
-}
-
-
 // remove cp from childs, which is a list of child owned by parent thread.
 void
 remove_child_process(struct thread *cp)
 {
-  list_remove(cp);
+  list_remove(cp->childs);
 	free(cp);
 }
-
-
 
