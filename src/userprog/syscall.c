@@ -5,6 +5,7 @@
 #include "threads/thread.h"   // thread_exit()
 #include "devices/shutdown.h" // shutdown_power_off()
 #include "filesys/filesys.h"  // filesys_create(), remove()
+#include "userprog/process.h" // process_execute(), process_wait()
 
 
 static void syscall_handler (struct intr_frame *f UNUSED);
@@ -13,7 +14,7 @@ static void exit(int status);
 static int wait(tid_t tid);
 static bool create(const char *file , unsigned initial_size);
 static bool remove(const char *file);
-pid_t exec(const char *cmd_line);
+static tid_t exec(const char *cmd_line);
 void
 syscall_init (void) 
 {
@@ -161,7 +162,7 @@ remove(const char *file)
 	return filesys_remove(file);
 }
 
-pid_t 
+tid_t 
 exec(const char *cmd_line)
 {
 	/* cmd_line을 수행하는 새로운 프로세스를 생성한다.
@@ -185,7 +186,6 @@ wait(tid_t tid)
 {
 	return process_wait(tid);
 }
-
 
 
 

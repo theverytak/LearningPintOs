@@ -218,7 +218,7 @@ thread_create (const char *name, int priority,
 	sema_init(&t->sema_load, 0);
 
 	// 나를 나의 부모의 자식리스트에 넣는다. 
-	list_push_back(&t->parent->childs, &t->me_as_child);
+	list_push_back(&thread_current()->childs, &t->me_as_child);
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -315,13 +315,19 @@ thread_exit (void)
   intr_disable ();
   list_remove (&t->allelem);
 
+	// *******************************************************
+	// 아 시발 이거 깃허브 뒤져서 찾았는데 왜 이거 추가해야
+	// 되는지 모르겠다. 주석에 욕까지 달았으니까 제발 형탁아
+	// 잊지말고 디버깅 나중에 해보자. 안녕 난 쉬러간다.
+	// 미래의 형탁아 고생해. 꼭 좋은 미래가 있을거야.
+	// ******************************************************
+	if(t != initial_thread) {
 	// 프로세스 디스크립터에 프로세스 종료를 알림
 	t->is_ended = true;
-	// 부모 프로세스의 상태를 대기에서 준비로 바꿈.
-	t->parent->status = THREAD_READY;
-	//	 부모프로세스는 대기상태를 이탈(세마업) 
+	// 부모프로세스는 대기상태를 이탈(세마업) 
 	sema_up(&t->sema_exit);
 	// 나의 상태를 죽음으로 변경
+	}
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -572,7 +578,8 @@ thread_schedule_tail (struct thread *prev)
   if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread) 
     {
       ASSERT (prev != cur);
-      palloc_free_page (prev);
+      //palloc_free_page (prev);
+			// 자식을 죽이는 것은 remove_child_process가 대신함.
     }
 }
 
@@ -640,11 +647,5 @@ thread* get_child_process(tid_t tid)
 	return NULL;
 }
 
-// remove cp from childs, which is a list of child owned by parent thread.
-void
-remove_child_process(struct thread *cp)
-{
-  list_remove(cp->childs);
-	free(cp);
-}
+
 

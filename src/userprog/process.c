@@ -148,28 +148,35 @@ int
 process_wait (tid_t child_tid UNUSED) 
 {
 
-	/* 자식 프로세스의 프로세스 디스크립터 검색(tid사용)
-		 예외 발생시(TID_ERROR == tid) -1 리턴
-		 자식 프로세스가 종료될 때 까지 세마포어 이용해서 대기
-		 자식프로세스 디스크립터 삭제
-		 자식 프로세스의 exit status 리턴
-		 */
 	// 자식 프로세스를 tid를 이용해 찾음.
-	struct thread *child = get_child_process(tid);
+	struct thread *child = get_child_process(child_tid);
 
 	// 만약 tid로 자식 프로세스 검색에 실패했다면, -1리턴
 	if(NULL == child)
-		return -1
+		return -1;
 
 	// 자식 프로세스의 종료를 기다림
 	sema_down(&child->sema_exit);	
-	
-	// 자식 프로세스를 나의 자식 리스트에서 삭제함.
-	list_remove(&child->me_as_child);
 
+	// 자식 프로세스가 정상적으로 종료됐는지 확인 후 비정상 종료면
+	// -1을 리턴.
+	if(false == child->is_ended)
+		return -1;
+	
+	// 자식의 죽음. 
+	remove_child_process(child);
+
+	// 자식 프로세스의 exit status 리턴
 	return child->exit_status;
 }
 
+// cp(child process)를 지움. 우선 자식으로서의 cp를 지우고, cp를 지움.
+void
+remove_child_process(struct thread *cp)
+{
+  list_remove(&cp->me_as_child);
+	palloc_free_page(cp);
+}
 /* Free the current process's resources. */
 void
 process_exit (void)
@@ -656,3 +663,4 @@ count_argument(const char *file_name)
 
 	return count;
 }
+
