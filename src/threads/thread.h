@@ -100,6 +100,8 @@ struct thread
 		struct semaphore sema_exit;					// exit semaphore
 		struct semaphore sema_load;					// load semaphore
 		bool exit_status;										// exit status when exit() called;
+		struct file **fdt;									// 파일디스크립터 테이블 포인터
+		int next_fd;												// 다음 할당할 테이블 주소. 시작값은 2
 #ifdef USERPROG
 		/* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */

@@ -217,6 +217,11 @@ thread_create (const char *name, int priority,
 	sema_init(&t->sema_exit, 0);
 	sema_init(&t->sema_load, 0);
 
+	// 파일 디스크립터 관련 부분. 파일 디스크립터 테이블을 할당 받고
+	// fdt이 그 처음을 가리키게 하고, next_fd가 2가 되게 한다.
+	t->fdt = palloc_get_page(PAL_ZERO);
+	t->next_fd = 2;
+
 	// 나를 나의 부모의 자식리스트에 넣는다. 
 	list_push_back(&thread_current()->childs, &t->me_as_child);
 
