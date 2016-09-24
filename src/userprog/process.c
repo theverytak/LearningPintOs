@@ -117,7 +117,7 @@ start_process (void *file_name_)
 	hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
 
 	// palloc 했던 아이들을 삭제합니다.
-  palloc_free_page (file_name);
+  // palloc_free_page (file_name); 이 부분을 주석처리가 맞는지 나중에 다시 확인 
 	palloc_free_page (fn_for_tokenize);
 
   /* If load failed, quit. */
