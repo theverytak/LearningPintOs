@@ -114,7 +114,7 @@ start_process (void *file_name_)
 	   아래 함수는 디버깅 하기 위해 선언했읍니다.
 		 나중에 지워주시기 바랍니다.
 		 ********************************** */
-	hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
+	//hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
 
 	// palloc 했던 아이들을 삭제합니다.
   // palloc_free_page (file_name); 이 부분을 주석처리가 맞는지 나중에 다시 확인 
@@ -183,6 +183,16 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+	int cur_fd_index = cur->next_fd;	// 현재 스레드의 fd인덱스를 저장.
+
+	// 아래는 fdt관련 파일 닫는 부분임. 
+	// 참조되지 않은 파일은 커널 구조체를 해체함????
+	while(cur_fd_index > 2) { // 2까지만. 0, 1은 원래 있으니까.
+		process_close_file(cur_fd_index - 1);
+		cur_fd_index--;
+	}
+	palloc_free_page(cur->fdt);	// get_page한거 free
+
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -664,3 +674,32 @@ count_argument(const char *file_name)
 	return count;
 }
 
+// 인자로 받은 f를 파일 디스크립터에 추가
+// 새로 추가된 f의 인덱스를 리턴.
+int process_add_file(struct file *f) {
+  struct thread *cur = thread_current ();
+	cur->fdt[cur->next_fd] = f;
+	cur->next_fd++:
+		
+	return cur->next_fd - 1;
+}
+
+// fd번째 파일 객체의 주소를 리턴.
+// 없으면 널 반환.
+struct file *process_get_file(int fd) {
+	struct thread *cur = thread_current();
+	if(NULL == cur->fdt[fd] || fd >= cur->next_fd)
+		return NULL;
+
+	return cur->fdt[fd];
+}
+
+// fd번째 파일 객체를 닫음.
+// fd번째는 NULL로 바꿈.
+void process_close_file(int fd) {
+	struct thread *cur = thread_current();
+	if(process_get_file(fd) != NULL) {
+		file_close(cur->fdt[fd]);
+		cur->fdt[fd] = NULL;
+	}
+}
