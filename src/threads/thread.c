@@ -635,11 +635,11 @@ thread* get_child_process(tid_t tid)
 	struct thread* t;
 	// for문을 돌면서 내가 원하는 자식 스레드를 검색할 놈을 선언.
 	struct list_elem *e;
+	// thread_current() 가 반복되므로 하나 선언.
+	struct thread* cur = thread_current();
 	// 나의 자식 리스트를 검색함. pid를 가지는 놈 선별.
 	// 아래 코드는 list_entry의 예제를 그대로 사용함. 
-	for(e = list_begin(&thread_current()->childs); 
-			e!= list_end(&thread_current()->childs);
-			e = list_next(e))
+	for(e = list_begin(&cur->childs); e!= list_end(&cur->childs); e = list_next(e))
 		{
 			t = list_entry(e, struct thread, me_as_child);
 			if(t->tid == tid)
