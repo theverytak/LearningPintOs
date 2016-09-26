@@ -60,6 +60,39 @@ set shiftwidth=2
 "enable ctags"
 set tags=./tags,tags
 set tags+=~/pintos/src/tags
+set tags+=~/system_prog/lecture_sysprog/02_file_io/tags
+
+"using cscope"
+set csprg=/usr/bin/cscope
+
+set csto=0
+
+set cst
+
+set nocsverb
+
+function! AddCscopeDatabase()
+
+let currentdir = getcwd()
+
+while !filereadable("cscope.out") && getcwd() != "/"
+
+cd ..
+
+endwhile
+
+if filereadable("cscope.out")
+
+csc add cscope.out
+
+endif
+
+endfunction
+
+call AddCscopeDatabase()
+
+set csverb
+
 
 
 
