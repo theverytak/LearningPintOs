@@ -650,5 +650,3 @@ thread* get_child_process(tid_t tid)
 	return NULL;
 }
 
-
-

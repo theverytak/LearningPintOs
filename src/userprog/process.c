@@ -186,7 +186,6 @@ process_exit (void)
 	int cur_fd_index = cur->next_fd;	// 현재 스레드의 fd인덱스를 저장.
 
 	// 아래는 fdt관련 파일 닫는 부분임. 
-	// 참조되지 않은 파일은 커널 구조체를 해체함????
 	while(cur_fd_index > 2) { // 2까지만. 0, 1은 원래 있으니까.
 		process_close_file(cur_fd_index - 1);
 		cur_fd_index--;
@@ -198,18 +197,19 @@ process_exit (void)
      to the kernel-only page directory. */
   pd = cur->pagedir;
   if (pd != NULL) 
-    {
-      /* Correct ordering here is crucial.  We must set
-         cur->pagedir to NULL before switching page directories,
-         so that a timer interrupt can't switch back to the
-         process page directory.  We must activate the base page
-         directory before destroying the process's page
-         directory, or our active page directory will be one
-         that's been freed (and cleared). */
-      cur->pagedir = NULL;
-      pagedir_activate (NULL);
-      pagedir_destroy (pd);
-    }
+	{
+		/* Correct ordering here is crucial.  We must set
+			 cur->pagedir to NULL before switching page directories,
+			 so that a timer interrupt can't switch back to the
+			 process page directory.  We must activate the base page
+			 directory before destroying the process's page
+			 directory, or our active page directory will be one
+			 that's been freed (and cleared). */
+		cur->pagedir = NULL;
+		pagedir_activate (NULL);
+		pagedir_destroy (pd);
+	}
+	// file_close여기서 한다.
 }
 
 /* Sets up the CPU for running user code in the current
@@ -408,6 +408,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
+	// 아래의 fild_close는 주석처리를 해야한다.
+	// 왜냐하면 위에서 열었는데 여기서 닫아버리면 다른 곳에서 참조를 못한다.
+	// close는 process_exit에서 한다.
   file_close (file);
   return success;
 }
@@ -679,7 +682,7 @@ count_argument(const char *file_name)
 int process_add_file(struct file *f) {
   struct thread *cur = thread_current ();
 	cur->fdt[cur->next_fd] = f;
-	cur->next_fd++:
+	cur->next_fd++;
 		
 	return cur->next_fd - 1;
 }
