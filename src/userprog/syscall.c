@@ -13,7 +13,6 @@
 
 static void syscall_handler (struct intr_frame *f UNUSED);
 
-struct lock filesys_lock;		// 사용할 lock 전역변수로 설정
 
 // 아래는 구현한 시스템컬의 목록임.
 void halt(void);
@@ -29,8 +28,6 @@ int write(int fd, void *buffer, unsigned size);
 void seek(int fd, unsigned position); 
 unsigned tell(int fd);
 void close(int fd);
-
-
 
 void
 syscall_init (void) 
@@ -48,7 +45,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 	 스택 포인터가 유저 영역인지 확인
 	 저장된 인자 값이 포인터일 경우 유저 영역의 주소인지 확인
 	*/
-	void *esp = f->esp;		// esp 복사
+	uint32_t *esp = f->esp;		// esp 복사
 	int sys_n = *(int *)(f->esp); 	  // system call number. esp가 가리키는 곳에 있음.
 	int arg[4];						// 인자를 넣을 배열. 최대 인자 갯수는 4개임.
 
@@ -69,7 +66,6 @@ syscall_handler (struct intr_frame *f UNUSED)
 			{
 				printf("halt() called\n");
 				halt();
-				break;
 			}
 		case SYS_EXIT :                  /* Terminate this process. */
 			{
@@ -174,8 +170,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 void 
 check_address(void *addr) 
 {
-	uint32_t address = (uint32_t)addr;
-	if(address <= 0x8048000 || address >= 0xc0000000)
+	if((uint32_t)addr < 0x8048000 || (uint32_t)addr > 0xc0000000) 
 		exit(-1);
 }
 
@@ -213,8 +208,9 @@ halt()
 void 
 exit(int status)
 {
-	thread_current()->status = status;
-	printf ("%s: exit(%d)\n", thread_name(), status);
+	struct thread *cur = thread_current();
+	cur->exit_status = status;
+	printf ("%s: exit(%d)\n", cur->name, status);
 	thread_exit();
 }
 
@@ -343,6 +339,7 @@ write(int fd, void *buffer, unsigned size) {
 	struct file *write_target;		// write할 파일 객체
 	off_t bytes_written;						// 기록한 바이트 수.
 	
+	printf("in write system call.....\n");
 	lock_acquire(&filesys_lock);	// 동시 접근을 막기 위해 lock사용
 
 	// fd가 0보다 작거나 같으면면 헛소리이기 때문에 -1반환

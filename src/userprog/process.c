@@ -114,7 +114,7 @@ start_process (void *file_name_)
 	   아래 함수는 디버깅 하기 위해 선언했읍니다.
 		 나중에 지워주시기 바랍니다.
 		 ********************************** */
-	//hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
+	hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
 
 	// palloc 했던 아이들을 삭제합니다.
   // palloc_free_page (file_name); 이 부분을 주석처리가 맞는지 나중에 다시 확인 
@@ -700,9 +700,9 @@ struct file *process_get_file(int fd) {
 // fd번째 파일 객체를 닫음.
 // fd번째는 NULL로 바꿈.
 void process_close_file(int fd) {
-	struct thread *cur = thread_current();
-	if(process_get_file(fd) != NULL) {
-		file_close(cur->fdt[fd]);
-		cur->fdt[fd] = NULL;
+	struct file *close_target = process_get_file(fd);
+	if(NULL != close_target) {
+		file_close(close_target);
+		thread_current()->fdt[fd] = NULL;
 	}
 }
