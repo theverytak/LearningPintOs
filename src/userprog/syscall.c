@@ -64,19 +64,19 @@ syscall_handler (struct intr_frame *f UNUSED)
 	{
 		case SYS_HALT :                   /* Halt the operating system. */
 			{
-				printf("halt() called\n");
+				//printf("halt() called\n");
 				halt();
 			}
 		case SYS_EXIT :                  /* Terminate this process. */
 			{
-				printf("exit() called\n");
+				//printf("exit() called\n");
 				get_argument(esp, arg, 1);
 				exit(arg[0]);
 				break;
 			}
 		case SYS_EXEC :                  /* Start another process. */
 			{
-				printf("exec() called\n");
+				//printf("exec() called\n");
 				get_argument(esp, arg, 1);
 				check_address((void *)arg[0]);		// arg[0]이 유효한 주소영역인지 검사.
 				f->eax = exec((const char *)arg[0]);
@@ -84,14 +84,14 @@ syscall_handler (struct intr_frame *f UNUSED)
 			}
 		case SYS_WAIT :                  /* Wait for a child process to die. */
 			{
-				printf("wait() called\n");
+				//printf("wait() called\n");
 				get_argument(esp, arg, 1);
 				f->eax = wait((tid_t)arg[0]);
 				break;
 			}
 		case SYS_CREATE :                /* Create a file. */
 			{
-				printf("create() called\n");
+				//printf("create() called\n");
 				get_argument(esp, arg, 2);
 				check_address((void *)arg[0]);		// arg[0]이 유효한 주소영역인지 검사.
 				f->eax = create((const char *)arg[0], arg[1]);
@@ -99,7 +99,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 			}
 		case SYS_REMOVE :                /* Delete a file. */
 			{
-				printf("remove() called\n");
+				//printf("remove() called\n");
 				get_argument(esp, arg, 1);
 				check_address((void *)arg[0]);	//  arg[0]이 유효한 주소영역인지 검사.
 				f->eax = remove((const char *)arg[0]);
@@ -107,7 +107,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 			}
      case SYS_OPEN :                 /* Open a file. */
 			{
-				printf("open() called\n");
+				//printf("open() called\n");
 				get_argument(esp, arg, 1);
 				check_address((void *)arg[0]);
 				f->eax = open((const char *)arg[0]);
@@ -115,14 +115,14 @@ syscall_handler (struct intr_frame *f UNUSED)
 			}
      case SYS_FILESIZE :             /* Obtain a file's size. */
 			{
-				printf("filesize() called\n");
+				//printf("filesize() called\n");
 				get_argument(esp, arg, 1);
 				f->eax  = filesize(arg[0]);
 				break;
 			}
      case SYS_READ :                 /* Read from a file. */
 			{
-				printf("read() called\n");
+				//printf("read() called\n");
 				get_argument(esp, arg, 3);
 				check_address((void *)arg[1]);
 				f->eax = read(arg[0], (void *)arg[1], arg[2]);
@@ -130,7 +130,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 			}
      case SYS_WRITE :                /* Write to a file. */
 			{
-				printf("write() called\n");
+				//printf("write() called\n");
 				get_argument(esp, arg, 3);
 				check_address((void *)arg[1]);
 				f->eax = write(arg[0], (void *)arg[1], arg[2]);
@@ -138,28 +138,28 @@ syscall_handler (struct intr_frame *f UNUSED)
 			}
      case SYS_SEEK :                 /* Change position in a file. */
 			{
-				printf("seek() called\n");
+				//printf("seek() called\n");
 				get_argument(esp, arg, 2);
 				seek(arg[0], arg[1]);
 				break;
 			}
      case SYS_TELL :                 /* Report current position in a file. */
 			{
-				printf("tell() called\n");
+				//printf("tell() called\n");
 				get_argument(esp, arg, 1);
 				f->eax = tell(arg[0]); 
 				break;
 			}
      case SYS_CLOSE :                /* Close a file. */
 			{
-				printf("close() called\n");
+				//printf("close() called\n");
 				get_argument(esp, arg, 1);
 				close(arg[0]);
 				break;
 			}
 	}
 
-  printf ("system call!\n");
+//  printf ("system call!\n");
   thread_exit ();
 }
 
@@ -170,29 +170,37 @@ syscall_handler (struct intr_frame *f UNUSED)
 void 
 check_address(void *addr) 
 {
-	if((uint32_t)addr < 0x8048000 || (uint32_t)addr > 0xc0000000) 
+	if((uint32_t)addr <= 0x8048000 || (uint32_t)addr >= 0xc0000000) 
 		exit(-1);
 }
 
 
-// 유저 스택에 저장된 인자값들을 커널에 복사.
+// 유저 스택에 저장된 인자값들을 arg에 복사.
 // 참고로 핀토스 시스템콜의 최대 인자 수는 3개. read, write의 인자가 3개이다.
 // 그러므로, count가 3보다 작거나 같다고  생각하고 만듬.
 void 
 get_argument(void *esp, int *arg, int count)
 {
 	int i;		// for loop;
-
-	// esp가 유저영역인지 확인. 
-	check_address(esp);		
-												
-	// 유저 스택에 저장된 인자값들을 커널에 복사
-	// 인자가 저장된 위치가 유저영역인지 확인
+	// 스택에 있는 인자들을 가리킴. 현재 esp는 system call number이므로
+	// +4을 해서 다음 주소를 가리키게 한다.
+	/* *****************************************
+		 잠깐 여기서 팁
+		 void *는 다음 주소를 +4하는 이유는 우리가 int배열인 arg를 가리키
+		 게 하고 싶기 때문이다. 만약 여기서 그냥 +4대신 ++해버리면 이상해진다
+		 *********************************************************** */
+	void *ptr = esp + 4;		
+	
 	ASSERT(count >= 0 && count <= 3);   // count의 범위를 확인.
 
-	for(i = 0; i < count; i++)
-		arg[i] = *(int *)(esp + i + 1);   // esp는 현재 system call number을 가리키므로
-													  	 // + 1한 값 부터 참조.
+	// 유저 스택에 저장된 인자값들을 커널에 복사
+	// 인자가 저장된 위치가 유저영역인지 확인
+	for(i = 0; i < count; i++) {
+		check_address(ptr);
+		arg[i] = *(int *)(ptr);   
+		//printf("arg[%d] = %d\n", i, arg[i]);
+		ptr += 4;
+	}
 }
 
 
@@ -339,7 +347,6 @@ write(int fd, void *buffer, unsigned size) {
 	struct file *write_target;		// write할 파일 객체
 	off_t bytes_written;						// 기록한 바이트 수.
 	
-	printf("in write system call.....\n");
 	lock_acquire(&filesys_lock);	// 동시 접근을 막기 위해 lock사용
 
 	// fd가 0보다 작거나 같으면면 헛소리이기 때문에 -1반환
