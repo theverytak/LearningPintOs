@@ -1,4 +1,5 @@
 #include "userprog/process.h"
+#include "userprog/syscall.h"
 #include <debug.h>
 #include <inttypes.h>
 #include <round.h>
@@ -210,6 +211,8 @@ process_exit (void)
 		pagedir_destroy (pd);
 	}
 	// file_close여기서 한다.
+	file_close(cur->run_file);
+
 }
 
 /* Sets up the CPU for running user code in the current
@@ -317,13 +320,21 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
+	//락을 건다. 로드 하는 동안 누가 건들면 안되기 때문에
+	lock_acquire(&filesys_lock);
   /* Open executable file. */
   file = filesys_open (file_name);
   if (file == NULL) 
     {
+			lock_release(&filesys_lock);		// 락 해제
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+
+	// 읽기 전에, run_file 설정 해주고, file_deny_write호출하자. 언락도 하고.
+	t->run_file = file;
+	file_deny_write(file);
+	lock_release(&filesys_lock);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -411,7 +422,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 	// 아래의 fild_close는 주석처리를 해야한다.
 	// 왜냐하면 위에서 열었는데 여기서 닫아버리면 다른 곳에서 참조를 못한다.
 	// close는 process_exit에서 한다.
-  file_close (file);
+  //file_close (file);
   return success;
 }
 

@@ -160,7 +160,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 	}
 
 //  printf ("system call!\n");
-  thread_exit ();
+//  thread_exit ();
 }
 
 /* addr이 유효한 주소인지 확인.0x804800에서 0x0000000사이이면 유저영역임.
@@ -291,14 +291,6 @@ filesize(int fd) {
 int
 read(int fd, void *buffer, unsigned size) {
 
-	/* 파일에 동시접근이 일어날 수 잇으므로 lock사용
-		 파일 디스크립터를 이용하여 파일 객체 검색
-		 파일 디스크립터가 0일 경우 키보드에 입력을 버퍼에
-		 저장 후 버퍼에 저장한 크기를 리턴(input_getc이용
-		 파일 디스크립터가 1일 경우 예외처리
-		 파일 디스크립터가 0이 아닐 경우 파일의 데이터를 크기
-		 만큼 저장 후 읽은 바이트 수를 리턴 */
-
 	struct file *read_target;		// read할 파일 객체
 	off_t bytes_read;						// 읽어들인 바이트 수.
 	unsigned i;											// 반복제어변수
@@ -313,7 +305,7 @@ read(int fd, void *buffer, unsigned size) {
 
 	// fd가 0이면 키보드의 입력을 받는다. 일반적 경우와 달리 처리해주어야함.
 	// 여기서는 input_getc함수를 사용합니다.
-	if(0 == fd) {
+	if(STDIN_FILENO == fd) {
 		for(i = 0; i < size; i++) {
 			((char *)buffer)[i] = input_getc();
 		}
@@ -337,13 +329,6 @@ read(int fd, void *buffer, unsigned size) {
 int
 write(int fd, void *buffer, unsigned size) {
 
-	/* 파일에 동시접근이 일어날 수 있으므로 lock사용
-		 파일 디스크립터를 이용하여 파일 객체 검색
-		 파일 디스크립터가 1일 경우 버퍼에 저장된 값을 화면에 출력
-		 후 버퍼의 크기 리턴(putbuf() 이용)
-		 파일 디스크립터가 1이 아닐 경우 버퍼에 저장된 데이터를
-		 size만큼 파일에 기록후 그 기록한 바이트 수를 리턴 */
-
 	struct file *write_target;		// write할 파일 객체
 	off_t bytes_written;						// 기록한 바이트 수.
 	
@@ -357,7 +342,7 @@ write(int fd, void *buffer, unsigned size) {
 
 	// fd가 1이면 모니터에 출력한다. 일반적 경우와 달리 처리해주어야함.
 	// 여기서는 putbuf함수를 사용합니다.
-	if(1 == fd) {
+	if(STDOUT_FILENO == fd) {
 		putbuf (buffer, size); 
 		lock_release(&filesys_lock);
 		return size;
