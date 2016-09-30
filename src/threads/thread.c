@@ -325,11 +325,11 @@ thread_exit (void)
 	검사한다. 왜냐하면 이니셜 스레드도 종료하기 위해서 본 함수에 들
 		어오기 때문이다. */
 	if(t != initial_thread) {
-	// 프로세스 디스크립터에 프로세스 종료를 알림
-	t->is_ended = true;
-	// 부모프로세스는 대기상태를 이탈(세마업) 
-	sema_up(&t->sema_exit);
-	// 나의 상태를 죽음으로 변경
+		// 프로세스 디스크립터에 프로세스 종료를 알림
+		t->is_ended = true;
+		// 부모프로세스는 대기상태를 이탈(세마업) 
+		sema_up(&t->sema_exit);
+		// 나의 상태를 죽음으로 변경
 	}
   thread_current ()->status = THREAD_DYING;
   schedule ();

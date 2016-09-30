@@ -99,7 +99,7 @@ struct thread
 		bool is_ended;											// 종료 유무
 		struct semaphore sema_exit;					// exit semaphore
 		struct semaphore sema_load;					// load semaphore
-		bool exit_status;										// exit status when exit() called;
+		int exit_status;										// exit status when exit() called;
 		struct file **fdt;									// 파일디스크립터 테이블 포인터
 		struct file *run_file;							// 현재 실행중인 파일구조체
 		int next_fd;												// 다음 할당할 테이블 주소. 시작값은 2

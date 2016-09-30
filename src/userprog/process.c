@@ -118,7 +118,7 @@ start_process (void *file_name_)
 	//hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
 
 	// palloc 했던 아이들을 삭제합니다.
-  // palloc_free_page (file_name); 이 부분을 주석처리가 맞는지 나중에 다시 확인 
+  palloc_free_page (file_name);
 	palloc_free_page (fn_for_tokenize);
 
   /* If load failed, quit. */
@@ -151,12 +151,18 @@ process_wait (tid_t child_tid UNUSED)
 
 	// 자식 프로세스를 tid를 이용해 찾음.
 	struct thread *child = get_child_process(child_tid);
+	// 원래 아래와 같은 변수를 선언하지 않고 그냥
+	// return child->exit_status를 했었는데 그러면
+	// remove_child_process에서 thread가 전부 파괴되기 때문에
+	// exit_status가 망가진다.
+	int exit_status;				
 
 	// 만약 tid로 자식 프로세스 검색에 실패했다면, -1리턴
 	if(NULL == child)
 		return -1;
 
 	// 자식 프로세스의 종료를 기다림
+	// 깨우는 것은 thread_exit
 	sema_down(&child->sema_exit);	
 
 	// 자식 프로세스가 정상적으로 종료됐는지 확인 후 비정상 종료면
@@ -164,11 +170,12 @@ process_wait (tid_t child_tid UNUSED)
 	if(false == child->is_ended)
 		return -1;
 	
-	// 자식의 죽음. 
+	// 자식의 죽음. 죽기 전에 자신의 exit_status를 저장함.
+	exit_status = child->exit_status;
 	remove_child_process(child);
 
 	// 자식 프로세스의 exit status 리턴
-	return child->exit_status;
+	return exit_status;
 }
 
 // cp(child process)를 지움. 우선 자식으로서의 cp를 지우고, cp를 지움.
@@ -589,23 +596,32 @@ argument_stack(char **parse ,int count ,void **esp)
 	void *top_of_command;
 	char **token_array = (char**)malloc(sizeof(char*) * count);
 	int *token_distance = (int*)malloc(sizeof(int) * count);
+	int token_length_sum = -1; 		// 아래 token_distance에 값을 넣는 과정에서 사용됨.
 	
 	// memory allocation check
 	if(token_array == NULL || token_distance == NULL)
     return TID_ERROR;
 
-	// move esp back before the parse changes
-	*esp -= strlen((char*)*parse) + 1;
-
 	// save the tokens to the token_array
 	for (token = strtok_r (prog_n_arg, " ", &save_ptr); token != NULL;
 			token = strtok_r (NULL, " ", &save_ptr)) {
-		token_distance[i] = token - prog_n_arg;
+		/*token_distance[i] = token - prog_n_arg;
+		printf("token : %s, prog_n_arg : %s\n", token, prog_n_arg);
+		printf("token - prog_n_arg : %d\n", token_distance[i]);*/
 		token_array[i] = (char*)malloc(sizeof(char) * strlen(token));
 		if(token_array[i] == NULL)
 			return TID_ERROR;
     strlcpy (token_array[i], token, strlen(token) + 1);
 		i++;
+	}
+
+	// token들의 길이 만큼 esp를 뒤로 옮김. +1하는 이유는 공백 저장을 위하여
+	// 그리고 token_distance도 값을 할당함. token_distance는 command의 시작부
+	// 터 각 토큰까지의 거리를 나타냄.
+	for(i = 0; i <count; i++) {
+		*esp -= strlen(token_array[i]) + 1;
+		token_distance[i] = token_length_sum + 1;
+		token_length_sum += strlen(token_array[i]) + 1;
 	}
 	
 //	assert(count == sizeof(token_array) / sizeof(token_array[0]));
