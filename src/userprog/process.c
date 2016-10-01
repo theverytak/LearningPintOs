@@ -46,9 +46,6 @@ process_execute (const char *file_name)
 	// 그런데, fn_copy를 strtok_r함수에서 사용하면 원래 값이 변하기 때문에
 	// fn_for_tokenize라는 애를 선언하고 값을 복사한 것이다.
 	// 같은 이유로 file_name이라는 애는 const기 때문에 안됨.
-	// *****************
-	// fn_for_tokenize를 free해야할 것 같은데 어디서 해야할 지 모르겠음.
-	// *****************
   fn_for_tokenize = palloc_get_page (0);
   if (fn_for_tokenize == NULL)
     return TID_ERROR;
@@ -167,8 +164,12 @@ process_wait (tid_t child_tid UNUSED)
 
 	// 자식 프로세스가 정상적으로 종료됐는지 확인 후 비정상 종료면
 	// -1을 리턴.
-	if(false == child->is_ended)
+	if(false == child->is_ended) {
+		// 아래의 remove_child_process는 원래 없었는데, 비정상 종료시에
+		// child지우는 것을 수행하지 않는 것 같아서 추가함
+		remove_child_process(child);
 		return -1;
+	}
 	
 	// 자식의 죽음. 죽기 전에 자신의 exit_status를 저장함.
 	exit_status = child->exit_status;
@@ -200,6 +201,8 @@ process_exit (void)
 	}
 	palloc_free_page(cur->fdt);	// get_page한거 free
 
+	// file_close여기서 한다.
+	file_close(cur->run_file);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -217,8 +220,6 @@ process_exit (void)
 		pagedir_activate (NULL);
 		pagedir_destroy (pd);
 	}
-	// file_close여기서 한다.
-	file_close(cur->run_file);
 
 }
 
@@ -605,9 +606,6 @@ argument_stack(char **parse ,int count ,void **esp)
 	// save the tokens to the token_array
 	for (token = strtok_r (prog_n_arg, " ", &save_ptr); token != NULL;
 			token = strtok_r (NULL, " ", &save_ptr)) {
-		/*token_distance[i] = token - prog_n_arg;
-		printf("token : %s, prog_n_arg : %s\n", token, prog_n_arg);
-		printf("token - prog_n_arg : %d\n", token_distance[i]);*/
 		token_array[i] = (char*)malloc(sizeof(char) * strlen(token));
 		if(token_array[i] == NULL)
 			return TID_ERROR;
@@ -701,6 +699,7 @@ count_argument(const char *file_name)
 			token = strtok_r (NULL, " ", &save_ptr))
 		count++;
 
+	palloc_free_page(fn_cp);
 	return count;
 }
 
