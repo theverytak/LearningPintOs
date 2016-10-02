@@ -571,8 +571,6 @@ install_page (void *upage, void *kpage, bool writable)
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
 
-// count the number of argument in the command line
-
 
 void
 argument_stack(char **parse ,int count ,void **esp)
