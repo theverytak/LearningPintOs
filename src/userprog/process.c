@@ -95,6 +95,7 @@ start_process (void *file_name_)
 	t->is_loaded = success ? true : false ;
 	
 	// 부모를 깨워도 됩니다. load함수가 끝났고, load플래그도 잘 섰기 때문에.
+	// cf) 부모는 exec()에서 잠듬
 	sema_up(&t->sema_load);
 
 	// 프로세스 실행을 위해 필요한 인자들을 스택에 쌓는다.
