@@ -32,7 +32,7 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
 	//아래의 변수들은 parsing하는데 사용되는 것들임. 
-	char *prog_name, *save_ptr, *fn_for_tokenize; 
+	char *temp_fn_copy, *save_ptr;
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
@@ -42,23 +42,20 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-	// 아래에서 thread_create를 사용하는데 마지막 인자로 fn_copy가 들어간다.
-	// 그런데, fn_copy를 strtok_r함수에서 사용하면 원래 값이 변하기 때문에
-	// fn_for_tokenize라는 애를 선언하고 값을 복사한 것이다.
-	// 같은 이유로 file_name이라는 애는 const기 때문에 안됨.
-  fn_for_tokenize = palloc_get_page (0);
-  if (fn_for_tokenize == NULL)
+	// temp_fn_copy에 복사
+  temp_fn_copy = palloc_get_page (0);
+  if (temp_fn_copy == NULL)
     return TID_ERROR;
-  strlcpy (fn_for_tokenize, file_name, PGSIZE);
+  strlcpy (temp_fn_copy, file_name, PGSIZE);
 
-// 여기서 파싱을 했음. 위에서 선언된 prog_name, save_ptr을 이용했음
+// 여기서 파싱을 했음. 위에서 선언된 temp_fn_copy, save_ptr을 이용했음
 // 첫 번째 토큰인 프로그램 이름(ex. "echo")을 뽑는다. 
-	prog_name = strtok_r(fn_for_tokenize, " ", &save_ptr);
+	temp_fn_copy = strtok_r(temp_fn_copy, " ", &save_ptr);
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (prog_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (temp_fn_copy, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
-	palloc_free_page(fn_for_tokenize);
+	palloc_free_page(temp_fn_copy);
   return tid;
 }
 
@@ -71,13 +68,12 @@ static void
 start_process (void *file_name_)
 {
   char *file_name = file_name_;
-	char *prog_name, *save_ptr, *fn_for_tokenize;
+	char *token, *save_ptr;
+	char *parsed_arg[LOADER_ARGS_LEN / 2 + 1];	//	init.c참조
   struct intr_frame if_;
 	struct thread *t;
   bool success;
-	// count는 argument_stack함수에 넣을 변수인데, count_argument라는 함수를 만들어서
-	// 인자 수를 세고 초기화 한다. 예를들어, file_name이 "echo x y"라면, 3을 카운트에 넣는다.
-	int count = count_argument(file_name);
+	int count = 0; // 인자의 갯수를 저장
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -85,18 +81,14 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
 
-	// process_execute에서 처럼 strtok_r함수를 위해 file_name을 복사함.
-  fn_for_tokenize = palloc_get_page (0);
-  if (fn_for_tokenize == NULL)
-    return TID_ERROR;
-  strlcpy (fn_for_tokenize, file_name, PGSIZE);
-
-
-// file_name을 파싱해야 하는 부분
-// argument_stack함수는 여기서 호출하는데, load함수에서 스택을 생성한다고 하여
-// load함수 호출 후 argument_stack 호출함.
-	prog_name = strtok_r(fn_for_tokenize, " ", &save_ptr);
-  success = load (prog_name, &if_.eip, &if_.esp);
+	for(token = strtok_r(file_name, " ", &save_ptr);
+			token != NULL;
+			token = strtok_r(NULL, " ", &save_ptr)) {
+			parsed_arg[count] = token;
+			count++;
+	}
+	
+  success = load (file_name, &if_.eip, &if_.esp);
 
 	// load성공 여부에 따라 스레드 디스크립터 내의 load플래그 전환.
 	t = thread_current();
@@ -106,20 +98,17 @@ start_process (void *file_name_)
 	sema_up(&t->sema_load);
 
 	// 프로세스 실행을 위해 필요한 인자들을 스택에 쌓는다.
-	argument_stack(&file_name, count, &if_.esp);
-
-	/* *********************************
-	   아래 함수는 디버깅 하기 위해 선언했읍니다.
-		 나중에 지워주시기 바랍니다.
-		 ********************************** */
+	if(success) {
+		argument_stack(parsed_arg, count, &if_.esp);
+	}
 	//hex_dump(if_.esp, if_.esp, PHYS_BASE - if_.esp, true);
 
 	// palloc 했던 아이들을 삭제합니다.
-  palloc_free_page (file_name);
-	palloc_free_page (fn_for_tokenize);
+  palloc_free_page (file_name_);
 
   /* If load failed, quit. */
   if (!success) { 
+		// t->exit_status = -1;
     thread_exit ();
 	}
 
@@ -588,53 +577,35 @@ install_page (void *upage, void *kpage, bool writable)
 void
 argument_stack(char **parse ,int count ,void **esp)
 {
-	char *prog_n_arg = *parse;
-	char *token, *save_ptr;  // for strtok_r
 	int i = 0;				// for for loop;
 	// int j = 0;				// 한 글자씩 스택에 넣는 경우에 필요함.
-	// token_array is for tokens
-	// token_distance is the address distance 
 	void *top_of_command;
-	char **token_array = (char**)malloc(sizeof(char*) * count);
-	int *token_distance = (int*)malloc(sizeof(int) * count);
+	int *token_distance = palloc_get_page(PAL_ZERO);
 	int token_length_sum = -1; 		// 아래 token_distance에 값을 넣는 과정에서 사용됨.
 	
 	// memory allocation check
-	if(token_array == NULL || token_distance == NULL)
+	if(token_distance == NULL)
     return TID_ERROR;
-
-	// save the tokens to the token_array
-	for (token = strtok_r (prog_n_arg, " ", &save_ptr); token != NULL;
-			token = strtok_r (NULL, " ", &save_ptr)) {
-		token_array[i] = (char*)malloc(sizeof(char) * strlen(token));
-		if(token_array[i] == NULL)
-			return TID_ERROR;
-    strlcpy (token_array[i], token, strlen(token) + 1);
-		i++;
-	}
 
 	// token들의 길이 만큼 esp를 뒤로 옮김. +1하는 이유는 공백 저장을 위하여
 	// 그리고 token_distance도 값을 할당함. token_distance는 command의 시작부
 	// 터 각 토큰까지의 거리를 나타냄.
 	for(i = 0; i <count; i++) {
-		*esp -= strlen(token_array[i]) + 1;
+		*esp -= strlen(parse[i]) + 1;
 		token_distance[i] = token_length_sum + 1;
-		token_length_sum += strlen(token_array[i]) + 1;
+		token_length_sum += strlen(parse[i]) + 1;
 	}
 	
-//	assert(count == sizeof(token_array) / sizeof(token_array[0]));
 
-	// 아래는 한 단어씩 넣는 방법임. 처음에 했는데 안됐다가 다시
-	// 하니까 됨. 문제는 아래 strlcpy함수에서 마지막 인자로 
-	// strlen(token_array[i]) + 1이 아니라
-	// strlen(token_array[i] + 1)을 넣었었음. 
+	// 아래는 한 단어씩 넣는 방법을 사용함. 
   top_of_command = *esp;
 	for(i = 0; i < count; i++) {
-		strlcpy((char*)(*esp), token_array[i], strlen(token_array[i]) + 1);
-		*esp += strlen(token_array[i]) + 1;			// considering '\0'
+		strlcpy((char*)(*esp), parse[i], strlen(parse[i]) + 1);
+		*esp += strlen(parse[i]) + 1;			// considering '\0'
 	}
-	//참고로 아래는 한 글자씩 넣는 방법을 사용함. 
-/*
+
+	/*참고로 아래는 한 글자씩 넣는 방법을 사용함. 
+
   top_of_command = *esp;
 	for(i = 0; i < count; i++) {
 		for(j = 0; j < strlen(token_array[i]); j++) {
@@ -643,8 +614,8 @@ argument_stack(char **parse ,int count ,void **esp)
 			printf("%c\n", token_array[i][j]);
 		}
 		*esp += 1;		// considering '\0'
-	}
-*/
+	}  */
+	
 
 	*esp = top_of_command;		// move esp back;
 
@@ -677,31 +648,9 @@ argument_stack(char **parse ,int count ,void **esp)
 
 
 	// memory free
-	free(token_distance);
-	for(i = 0; i < count; i++)
-		free(token_array[i]);
-	free(token_array);
+	palloc_free_page(token_distance);
 }
 
-// return the number of arguments
-int
-count_argument(const char *file_name)
-{
-	int count = 0;
-	char *fn_cp;
-	char *token, *save_ptr;
-
-  fn_cp = palloc_get_page (0);
-  if (fn_cp == NULL)
-    return TID_ERROR;
-  strlcpy (fn_cp, file_name, PGSIZE);
-	for (token = strtok_r (fn_cp, " ", &save_ptr); token != NULL;
-			token = strtok_r (NULL, " ", &save_ptr))
-		count++;
-
-	palloc_free_page(fn_cp);
-	return count;
-}
 
 // 인자로 받은 f를 파일 디스크립터에 추가
 // 새로 추가된 f의 인덱스를 리턴.

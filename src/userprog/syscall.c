@@ -263,14 +263,22 @@ wait(tid_t tid)
 int 
 open(const char *file) {
 	// open_target은 file이라는 이름으로 열고 싶은 파일
-	struct file *open_target = filesys_open(file);
+	struct file *open_target;
+	int result;
+	lock_acquire(&filesys_lock);
+	open_target = filesys_open(file);
 
 	// 실패시 -1리턴
-	if(NULL == open_target)
+	if(NULL == open_target) {
+		lock_release(&filesys_lock);
 		return -1;
+	}
+
+	result = process_add_file(open_target);
+	lock_release(&filesys_lock);
 		
 	// 오픈 성공했으면 open_target을 fdt에 넣고 그 인덱스 리턴
-	return process_add_file(open_target);
+	return result;
 }
 
 // 파일의 크기를 리턴. 대부분의 역할은 file_length가 하므로
