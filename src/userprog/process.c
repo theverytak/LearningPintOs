@@ -69,7 +69,7 @@ start_process (void *file_name_)
 {
   char *file_name = file_name_;
 	char *token, *save_ptr;
-	char *parsed_arg[LOADER_ARGS_LEN / 2 + 1];	//	init.c참조
+	char *parsed_arg[LOADER_ARGS_LEN / 2 + 1];	//	loader.h참조
   struct intr_frame if_;
 	struct thread *t;
   bool success;
