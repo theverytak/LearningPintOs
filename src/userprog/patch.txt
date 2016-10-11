@@ -1,0 +1,118 @@
+--- mobibench_original.c	2016-10-11 16:07:09.449366465 +0900
++++ mobibench_fix.c	2016-10-11 16:00:05.274073751 +0900
+@@ -25,6 +25,7 @@
+ #define __USE_GNU
+ #include <fcntl.h>
+ #include <time.h>
++#include <sys/time.h>
+ #include <string.h> 
+ 
+ #include <sys/mman.h>
+@@ -208,32 +209,32 @@
+ 	return g_state;
+ }
+ 
+-void print_time(struct timeval T1, struct timeval T2)
++void print_time(struct timespec TS1, struct timespec TS2)
+ {
+-	long sec,usec;
++	long sec, nsec;
+ 	double time;
+ 	double rate;
+ 	
+ 	time_t t;
+ 	
+-	if(T1.tv_usec > T2.tv_usec)
++	if(TS1.tv_nsec > TS2.tv_nsec)
+ 	{
+-		sec = T2.tv_sec - T1.tv_sec -1;
+-		usec = 1000000 + T2.tv_usec - T1.tv_usec;
++		sec = TS2.tv_sec - TS1.tv_sec -1;
++		nsec = 1000000 + TS2.tv_nsec - TS1.tv_nsec;
+ 	}
+ 	else
+ 	{
+-		sec = T2.tv_sec - T1.tv_sec;
+-		usec = T2.tv_usec - T1.tv_usec;
++		sec = TS2.tv_sec - TS1.tv_sec;
++		nsec = TS2.tv_nsec - TS1.tv_nsec;
+ 	}
+ 
+-	time = (double)sec + (double)usec/1000000;
++	time = (double)sec + (double)nsec/1000000;
+ 	
+ 	if(db_test_enable == 0)
+ 	{
+ 		rate = kilo64*1024*num_threads/time;
+-		printf("[TIME] :%8ld sec %06ldus. \t%.0f B/sec, \t%.2f KB/sec, \t%.2f MB/sec.",sec,usec, rate, rate/1024, rate/1024/1024);
+-		if(Latency_state==1) fprintf(Latency_fp,"[TIME] :%8ld sec %06ldus. \t%.0f B/sec, \t%.2f KB/sec, \t%.2f MB/sec.",sec, usec, rate, rate/1024, rate/1024/1024);
++		printf("[TIME] :%8ld sec %09ldus. \t%.0f B/sec, \t%.2f KB/sec, \t%.2f MB/sec.",sec,nsec, rate, rate/1024, rate/1024/1024);
++		if(Latency_state==1) fprintf(Latency_fp,"[TIME] :%8ld sec %09ldus. \t%.0f B/sec, \t%.2f KB/sec, \t%.2f MB/sec.",sec, nsec, rate, rate/1024, rate/1024/1024);
+ 		if(g_access == MODE_RND_WRITE || g_access == MODE_RND_READ)
+ 		{
+ 			printf(" %.2f IOPS(%dKB) ", rate/1024/reclen, (int)reclen);
+@@ -254,7 +255,7 @@
+ 	else
+ 	{
+ 		rate = db_transactions*num_threads/time;
+-		printf("[TIME] :%8ld sec %06ldus. \t%.2f Transactions/sec\n",sec,usec, rate);
++		printf("[TIME] :%8ld sec %09ldus. \t%.2f Transactions/sec\n",sec,nsec, rate);
+ #ifdef ANDROID_APP
+ 		tps = (float)rate;
+ #endif		
+@@ -1481,20 +1482,20 @@
+ 
+ long long get_current_utime(void)
+ {
+-	struct timeval current;
++	struct timespec current;
+ 	
+-	gettimeofday(&current,NULL);
++	clock_gettime(CLOCK_REALTIME, &current);
+ 	
+-	return (current.tv_sec*1000000 + current.tv_usec);	
++	return (current.tv_sec*1000000 + current.tv_nsec);	
+ }
+ 
+ long long get_relative_utime(long long start)
+ {
+-	struct timeval current;
++	struct timespec current;
+ 	
+-	gettimeofday(&current,NULL);
++	clock_gettime(CLOCK_REALTIME, &current);
+ 	
+-	return (current.tv_sec*1000000 + current.tv_usec - start);		
++	return (current.tv_sec*1000000 + current.tv_nsec - start);		
+ }
+ 
+ int get_new_fd(int fd_org)
+@@ -2202,7 +2203,7 @@
+ {
+ 	int ret = 0;
+ 	int count;
+-	struct timeval T1, T2;
++	struct timespec TS1, TS2;
+ 	int i = 0;
+ 	char* maddr;
+ 	pthread_t	thread_id[MAX_THREADS];
+@@ -2409,7 +2410,7 @@
+ 	drop_caches();
+ 
+ 	/* Start measuring data for performance */
+-	gettimeofday(&T1,NULL);
++	clock_gettime(CLOCK_REALTIME, &TS1);
+ 	cpuUsage(START_CPU_CHECK);
+ 
+ 	setState(EXEC, NULL);
+@@ -2434,8 +2435,8 @@
+ 	printf("[Messurement Result]\n");
+ 	printf("-----------------------------------------\n");
+ 	cpuUsage(END_CPU_CHECK);
+-	gettimeofday(&T2,NULL);
+-	print_time(T1, T2);
++	clock_gettime(CLOCK_REALTIME, &TS2);
++	print_time(TS1, TS2);
+ 
+ 	if(num_threads == 1)
+ 	{
