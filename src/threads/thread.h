@@ -89,6 +89,7 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
+		int64_t wakeup_tick;								// 이 tick이전에는 깨우지 않는다.
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -149,4 +150,10 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 struct thread* get_child_process(tid_t tid);
 void remove_child_process(struct thread *cp);
+
+void thread_sleep(int64_t ticks);
+void thread_awake(int64_t ticks);
+void update_next_tick_to_awake(int64_t ticks);
+int64_t get_next_tick_to_awake(void);
+
 #endif /* threads/thread.h */

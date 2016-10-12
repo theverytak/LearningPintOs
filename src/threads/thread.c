@@ -29,6 +29,11 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+/* 잠자는 스레드들의 리스트 */
+static struct list sleep_list;
+
+static int64_t next_tick_to_awake = INT64_MAX;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -93,6 +98,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+	list_init (&sleep_list); // sleep list를 초기화. 위의 코드를 따라함.
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -652,3 +658,59 @@ thread* get_child_process(tid_t tid)
 	return NULL;
 }
 
+
+// 현재 thread를 ticks만큼 재우고, 스케쥴링함.
+void thread_sleep(int64_t ticks) {
+	struct thread* cur = thread_current();
+	enum intr_level old_level;		
+
+	/* 현재 스레드가 idle스레드가 아니면 재운다.
+		 우선 상태를 blocked로 바꾸고, 깨어날 시간을 저장. */
+	if(cur != idle_thread) {
+		old_level = intr_disable();  // to disable intr;
+		cur->status = THREAD_BLOCKED;
+		cur->wakeup_tick = ticks;
+
+		/* sleep list에 넣고, next_tick_to_awake업데이트함
+			 혹시 새로들어온 내가 최소일 수 있으니까 */
+		list_push_back(&sleep_list, &cur->elem);
+		update_next_tick_to_awake(ticks);
+		// 그 후에 스케쥴해서 새로운 current_thread가 나올 수 있게
+		schedule();
+  	intr_set_level (old_level);   // to enable intr;
+	}
+
+}
+
+// ticks보다 남은 시간이 적은 thread를 깨우는 함수
+void thread_awake(int64_t ticks) {
+	struct list_elem* e;	
+	struct thread *t;	
+	/* sleep list를 순회하면서 깨워야할 아이들은 깨우고, 
+		 아직 남아있는 아이들을 토대로 next_tick_to_awake를 최신화 */
+	// TODO : 아래 for문에서 문제가 있었던 것을 보고서에 쓸 것.
+	// 지혜를 남겨 놓자면 예전엔 for문 안에서 list_next를 함
+	// 근데 그렇게 하면 list_remove를 하는 순간 e는 외톨이가 됨. 
+	for(e = list_begin(&sleep_list); e != list_end(&sleep_list); ) {
+		t = list_entry (e, struct thread, elem);	
+		if(t->wakeup_tick <= ticks) {
+			e = list_remove(&t->elem);
+			thread_unblock(t);
+    }
+		else {
+			update_next_tick_to_awake(t->wakeup_tick);
+			e = list_next(e);
+		}
+	}
+}
+
+// ticks가 next_tick_to_awake보다 작으면 최신화
+void update_next_tick_to_awake(int64_t ticks) {
+	if(ticks < next_tick_to_awake)
+		next_tick_to_awake = ticks;
+}
+
+//간단한 getter
+int64_t get_next_tick_to_awake(void) {
+	return next_tick_to_awake;
+}
