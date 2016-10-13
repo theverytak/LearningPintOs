@@ -417,9 +417,8 @@ thread_get_priority (void)
 void
 thread_set_nice (int nice UNUSED) 
 {
-	struct thread *cur = thread_current();
   intr_disable();
-
+	struct thread *cur = thread_current();
 	cur->nice = nice;						//nice 변경
 	mlfqs_priority(cur);				//priority변경
 	test_max_priority();				//스케쥴링
