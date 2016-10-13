@@ -399,9 +399,15 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+	// mlfqs면 안함
 	if(true == thread_mlfqs)
 		return ;
+	intr_disable();		// TODO 왜 이거 막아야하는지 알아볼 것
+
   thread_current ()->priority = new_priority;
+
+	intr_enable();
+
 	test_max_priority();
 }
 
@@ -418,6 +424,7 @@ void
 thread_set_nice (int nice UNUSED) 
 {
   intr_disable();
+
 	struct thread *cur = thread_current();
 	cur->nice = nice;						//nice 변경
 	mlfqs_priority(cur);				//priority변경
@@ -458,10 +465,12 @@ thread_get_recent_cpu (void)
 {
 	int recent_cpu_return;
 	struct thread *cur = thread_current();
+
 	intr_disable();  // to disable intr;
 	recent_cpu_return = mult_mixed(cur->recent_cpu, 100);
 	recent_cpu_return = fp_to_int_round(recent_cpu_return);
  	intr_enable();   // to enable intr;
+
   return recent_cpu_return;
 }
 
@@ -789,7 +798,7 @@ void mlfqs_priority(struct thread *t) {
 	// 우변의 세 항을 일단 계산
 	term1 = int_to_fp(PRI_MAX);
 	term2 = div_mixed(t->recent_cpu, 4);
-	term3 = mult_mixed(int_to_fp(t->nice), 2);
+	term3 = int_to_fp(t->nice * 2);
 	
 	// 왼쪽에서 부터 차례로 뺄셈
 	term1 = sub_fp(term1, term2);
@@ -809,12 +818,12 @@ void mlfqs_recent_cpu(struct thread *t) {
 	term1 = mult_mixed(load_avg, 2);
 	term2 = add_mixed(term1, 1);		// 겹치는 부분이 있어서 term1을 활용함
 	term3 = t->recent_cpu;
-	term4 = int_to_fp(t->nice);
+	term4 = t->nice;
 
 	//왼쪽부터 차례로 계산
 	term1 = div_fp(term1, term2);
 	term1 = mult_fp(term1, term3);
-	term1 = add_fp(term1, term4);
+	term1 = add_mixed(term1, term4);
 
 	//결과값 저장
 	t->recent_cpu = term1;

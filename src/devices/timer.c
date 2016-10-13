@@ -187,8 +187,8 @@ timer_interrupt (struct intr_frame *args UNUSED)
 
 		// 1초마다 load_avg, 모든 thread의 recent_cpu, priority갱신
 		if(0 == ticks % 100) {
-			mlfqs_recalc();
 			mlfqs_load_avg();
+			mlfqs_recalc();
 		}
 	}
 
