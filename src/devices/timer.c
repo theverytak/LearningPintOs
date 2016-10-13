@@ -176,6 +176,22 @@ timer_interrupt (struct intr_frame *args UNUSED)
   ticks++;
   thread_tick ();
 
+	// if mlfqs
+	if(true == thread_mlfqs) {
+		// timer_interrupt발생 시마다 recent_cpu증가
+		mlfqs_increment();
+
+		// 4틱마다 priority 갱신
+		if(0 == ticks % 4)
+			mlfqs_priority(thread_current());
+
+		// 1초마다 load_avg, 모든 thread의 recent_cpu, priority갱신
+		if(0 == ticks % 100) {
+			mlfqs_recalc();
+			mlfqs_load_avg();
+		}
+	}
+
 	// 현재 가장 빨리 깨워야 하는 tick이 ticks보다 작거나 같으면 깨운다.
 	if(get_next_tick_to_awake() <= ticks) {
 		thread_awake(ticks);

@@ -91,6 +91,9 @@ struct thread
     struct list_elem allelem;           /* List element for all threads list. */
 		int64_t wakeup_tick;								// 이 tick이전에는 깨우지 않는다.
 
+		int nice;														// for mlfq
+		int recent_cpu;											// for mlfq
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 	  struct thread* parent; 						  // 부모를 향한 포인터
@@ -158,5 +161,13 @@ int64_t get_next_tick_to_awake(void);
 void test_max_priority(void);
 bool cmp_priority(const struct list_elem *a, const struct list_elem *b,
 									void *aux UNUSED);
+
+//mlfq관련 함수들.
+void mlfqs_priority(struct thread *t);
+void mlfqs_recent_cpu(struct thread *t);
+void mlfqs_load_avg(void);
+void mlfqs_increment(void);
+void mlfqs_recalc(void);
+
 
 #endif /* threads/thread.h */
