@@ -19,6 +19,7 @@
 #include "threads/malloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "vm/page.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -74,6 +75,8 @@ start_process (void *file_name_)
 	struct thread *t;
   bool success;
 	int count = 0; // 인자의 갯수를 저장
+
+	vm_init(&thread_current()->vm);
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -190,6 +193,7 @@ process_exit (void)
 		cur_fd_index--;
 	}
 	palloc_free_page(cur->fdt);	// get_page한거 free
+	vm_destory(&cur->vm);
 
 	// file_close여기서 한다.
 	file_close(cur->run_file);
@@ -503,30 +507,46 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
          and zero the final PAGE_ZERO_BYTES bytes. */
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
-      /* Get a page of memory. */
+			/* 아래 부분은 주석 처리를 함. vm_entry를 사용하기 때문
+      // Get a page of memory. 
       uint8_t *kpage = palloc_get_page (PAL_USER);
       if (kpage == NULL)
         return false;
 
-      /* Load this page. */
+      // Load this page. 
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
           palloc_free_page (kpage);
           return false; 
         }
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
-      /* Add the page to the process's address space. */
+0
+      // Add the page to the process's address space. 
       if (!install_page (upage, kpage, writable)) 
         {
           palloc_free_page (kpage);
           return false; 
         }
+			여기 까지 주석처리함.*/
+
+			// vm_entry를 생성, 멤버변수(오프셋, 사이즈,...) 설정
+			struct vm_entry* vme = (struct vm_entry *)malloc(sizeof(struct vm_entry));
+			vme->type = VM_BIN;
+			vme->vaddr = upage;
+			vme->offset = ofs;
+			vme->read_bytes = read_bytes;
+			vme->zero_bytes = zero_bytes;
+			vme->writable = writable;
+			vme->is_loaded = false;
+			vme->file = file;
+			
+			// 생성한 vm_entry를 해시 테이블에 추가
+			insert_vme(&thread_current()->vm, vme);
 
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
+			ofs += page_read_bytes;
       upage += PGSIZE;
     }
   return true;
@@ -549,6 +569,20 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
+
+	// vme만들고 초기화, 해시 테이블에 삽입
+	struct vm_entry *vme = (struct vm_entry*)malloc(sizeof(struct vm_entry));
+	vme->type = VM_ANON;
+	vme->vaddr = ((uint8_t*)PHYS_BASE) - PGSIZE;
+	vme->writable = success;
+	vme->is_loaded = success;
+	vme->file = NULL;
+	vme->offset = 0;
+	vme->read_bytes = 0;
+	vme->zero_bytes = 0;
+
+	insert_vme(&thread_current()->vm, vme);
+
   return success;
 }
 
@@ -679,4 +713,53 @@ void process_close_file(int fd) {
 		file_close(close_target);
 		thread_current()->fdt[fd] = NULL;
 	}
+}
+
+bool handle_mm_fault(struct vm_entry *vme) {
+	// 물리 메모리에 페이지 할당 후 실패시 false리턴
+	void* phys_addr = palloc_get_page(PAL_USER);
+	bool loaded = false;
+  if (NULL == phys_addr)
+    return false;
+
+	switch (vme->type) {
+		// 물리 메모리에 로드
+		// 그 후 가상 ~ 물리 페이지 간 연결
+		case VM_BIN :
+			loaded = load_file(phys_addr, vme);
+			vme->is_loaded = install_page(vme->vaddr, phys_addr, vme->writable);
+			break;
+		case VM_FILE :
+			break;
+		case VM_ANON :
+			break;
+		default :
+			return false;
+	}
+
+	// 물리 메모리에 탑재 실패했으면 false리턴
+	if(false == loaded)
+		return false;
+	// 맵핑 실패했으면 false
+	if(false == vme->is_loaded)
+		palloc_free_page(phys_addr);
+
+	return vme->is_loaded;
+}
+
+
+// disk에 있는 page를 물리 메모리로 load하는 함수
+bool load_file(void *kaddr, struct vm_entry *vme) {
+	// vme의 file에서 offset만큼 읽는다. 읽을 때는 read_bytes만큼 읽고,
+	// 그 결과는 kaddr(물리 페이지)에 저장된다.
+	// file_read_at의 리턴과 vme->read_bytes를 비교한다
+	if(vme->read_bytes != file_read_at(vme->file, kaddr, 
+																		 vme->read_bytes, vme->offset)) {
+	palloc_free_page(kaddr);
+	return false;
+	}
+	// 남는 부분은 0으로 채운다
+	memset(kaddr + vme->read_bytes, 0, vme->zero_bytes);
+
+	return true;
 }

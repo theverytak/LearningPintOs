@@ -1,7 +1,9 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include <string.h>
 #include "threads/interrupt.h"
+#include "threads/vaddr.h"
 #include "threads/thread.h"   // thread_exit()
 #include "devices/shutdown.h" // shutdown_power_off()
 #include "devices/input.h"		// input_getc()
@@ -9,6 +11,7 @@
 #include "filesys/file.h"			// file_close(), file_read(), file_write(), 
 															//file_seek(), file_tell(), file_length()
 #include "userprog/process.h" // process_execute(), process_wait()
+#include "vm/page.h"
 
 
 static void syscall_handler (struct intr_frame *f UNUSED);
@@ -49,7 +52,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 	int sys_n = *(int *)(f->esp); 	  // system call number. esp가 가리키는 곳에 있음.
 	int arg[4];						// 인자를 넣을 배열. 최대 인자 갯수는 4개임.
 
-	check_address(esp);
+	check_address(esp, esp);
 
 	/*  ****************************************************************
 		아래는 시스템컬 핸들러 테이블 없이 시스템컬 넘버에 따라 알맞은 시스템
@@ -78,7 +81,9 @@ syscall_handler (struct intr_frame *f UNUSED)
 			{
 				//printf("exec() called\n");
 				get_argument(esp, arg, 1);
-				check_address((void *)arg[0]);		// arg[0]이 유효한 주소영역인지 검사.
+				//아래는 주석처리됨
+				//check_address((void *)arg[0]);		// arg[0]이 유효한 주소영역인지 검사.
+				check_valid_string((void *)arg[0], esp);
 				f->eax = exec((const char *)arg[0]);
 				break;
 			}
@@ -93,7 +98,8 @@ syscall_handler (struct intr_frame *f UNUSED)
 			{
 				//printf("create() called\n");
 				get_argument(esp, arg, 2);
-				check_address((void *)arg[0]);		// arg[0]이 유효한 주소영역인지 검사.
+				//check_address((void *)arg[0]);		// arg[0]이 유효한 주소영역인지 검사.
+				check_valid_string((void *)arg[0], esp);
 				f->eax = create((const char *)arg[0], arg[1]);
 				break;
 			}
@@ -101,7 +107,8 @@ syscall_handler (struct intr_frame *f UNUSED)
 			{
 				//printf("remove() called\n");
 				get_argument(esp, arg, 1);
-				check_address((void *)arg[0]);	//  arg[0]이 유효한 주소영역인지 검사.
+				//check_address((void *)arg[0]);	//  arg[0]이 유효한 주소영역인지 검사.
+				check_valid_string((void *)arg[0], esp);
 				f->eax = remove((const char *)arg[0]);
 				break;
 			}
@@ -109,7 +116,8 @@ syscall_handler (struct intr_frame *f UNUSED)
 			{
 				//printf("open() called\n");
 				get_argument(esp, arg, 1);
-				check_address((void *)arg[0]);
+				//check_address((void *)arg[0]);
+				check_valid_string((void *)arg[0], esp);
 				f->eax = open((const char *)arg[0]);
 				break;
 			}
@@ -124,7 +132,8 @@ syscall_handler (struct intr_frame *f UNUSED)
 			{
 				//printf("read() called\n");
 				get_argument(esp, arg, 3);
-				check_address((void *)arg[1]);
+				//check_address((void *)arg[1]);  아래 함수로 대체
+				check_valid_buffer((void *)arg[1], arg[2], esp, true); 
 				f->eax = read(arg[0], (void *)arg[1], arg[2]);
 				break;
 			}
@@ -132,7 +141,8 @@ syscall_handler (struct intr_frame *f UNUSED)
 			{
 				//printf("write() called\n");
 				get_argument(esp, arg, 3);
-				check_address((void *)arg[1]);
+				//check_address((void *)arg[1]);
+				check_valid_string((void *)arg[0], esp);
 				f->eax = write(arg[0], (void *)arg[1], arg[2]);
 				break;
 			}
@@ -167,11 +177,14 @@ syscall_handler (struct intr_frame *f UNUSED)
  경계는 제외.
  esp를 검사할 때 뿐만 아니라 예를들어 인자로 포인터를 받아온 경우에도
  아래 함수를 사용가능. */
-void 
-check_address(void *addr) 
+// + vm_entry를 리턴하도록 변경됨.
+ 
+struct vm_entry *check_address(void *addr, void* esp /*Unused*/) 
 {
 	if((uint32_t)addr <= 0x8048000 || (uint32_t)addr >= 0xc0000000) 
 		exit(-1);
+
+	return find_vme(addr);
 }
 
 
@@ -196,7 +209,7 @@ get_argument(void *esp, int *arg, int count)
 	// 유저 스택에 저장된 인자값들을 커널에 복사
 	// 인자가 저장된 위치가 유저영역인지 확인
 	for(i = 0; i < count; i++) {
-		check_address(ptr);
+		check_address(ptr, ptr);
 		arg[i] = *(int *)(ptr);   
 		//printf("arg[%d] = %d\n", i, arg[i]);
 		ptr += 4;
@@ -396,3 +409,42 @@ void
 close(int fd) {
 	process_close_file(fd);
 }
+
+// 인자로 받은 buffer의 주소가 유효한지 검사
+void check_valid_buffer(void *buffer, unsigned size, void *esp, bool to_write) {
+	int i, num_of_page;		// buffer ~ buffer + size가 몇 페이지인지
+	// buffer, buffer+size의 주소가 vme의 vaddr에 저장될 때
+	// 아래와 같은 형식으로 저장됨
+	// vpn을 찾는 과정임
+	void *begin = pg_round_down(buffer);
+	void *end = pg_round_down(buffer + size);
+	struct vm_entry *vme;
+
+	// 페이지 수를 찾는다
+	num_of_page = ((int)(begin - end) / PGSIZE) + 1;
+	for(i = 0; i < num_of_page; i++) {
+		vme = check_address(buffer + (PGSIZE * i), esp);
+		// 해당 주소에 vme가 없거나, writable이 false이면 강종
+		// (강제 종료라는 뜻ㅎ)
+		if(NULL == vme || (false == vme->writable))
+			exit(-1);
+	}
+}	
+
+void check_valid_string(const void *str, void *esp) {
+	int i, num_of_page;		// str시작 ~ str의 마지막글자가 몇 페이지인지
+	void *begin = pg_round_down(str);
+	void *end = pg_round_down(str + strlen((char *)str));
+	struct vm_entry *vme;
+
+	// 페이지 수를 찾는다
+	num_of_page = ((int)(begin - end) / PGSIZE) + 1;
+	for(i = 0; i < num_of_page; i++) {
+		vme = check_address(str + (PGSIZE * i), esp);
+		// 해당 주소에 vme가 없으면 강종(강제 종료라는 뜻ㅎ)
+		if(NULL == vme)
+			exit(-1);
+	}
+}
+
+

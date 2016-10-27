@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include <hash.h>
 #include "threads/synch.h"
 /* States in a thread's life cycle. */
 enum thread_status
@@ -99,7 +100,7 @@ struct thread
 	  struct thread* parent; 						  // 부모를 향한 포인터
 		struct list_elem me_as_child;			  // 나의 부모의 list에 들어가기 위하여
 		struct list childs;									// 나의 자식들을 위한 list
-		bool is_loaded;											// 메로리 탑재 유무
+		bool is_loaded;											// 메모리 탑재 유무
 		bool is_ended;											// 종료 유무
 		struct semaphore sema_exit;					// exit semaphore
 		struct semaphore sema_load;					// load semaphore
@@ -114,6 +115,7 @@ struct thread
 
     /* Owned by thread.c. */
 		unsigned magic;                     /* Detects stack overflow. */
+		struct hash vm;											// 스레드의 해시테이블을 관리
 	};
 
 /* If false (default), use round-robin scheduler.
