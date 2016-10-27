@@ -63,7 +63,7 @@ struct vm_entry *find_vme(void *vaddr) {
 
 void vm_destroy(struct hash *vm) {
 	if(NULL != vm)
-		hash_destory(vm, vm_destroy_func);
+		hash_destroy(vm, vm_destroy_func);
 }
 
 void vm_destroy_func(struct hash_elem *e, void *aux UNUSED) {

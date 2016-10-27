@@ -193,7 +193,7 @@ process_exit (void)
 		cur_fd_index--;
 	}
 	palloc_free_page(cur->fdt);	// get_page한거 free
-	vm_destory(&cur->vm);
+	vm_destroy(&cur->vm);
 
 	// file_close여기서 한다.
 	file_close(cur->run_file);
