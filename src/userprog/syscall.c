@@ -142,7 +142,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 				//printf("write() called\n");
 				get_argument(esp, arg, 3);
 				//check_address((void *)arg[1]);
-				check_valid_string((void *)arg[0], esp);
+				check_valid_buffer((void *)arg[1], arg[2], esp, false); 
 				f->eax = write(arg[0], (void *)arg[1], arg[2]);
 				break;
 			}
@@ -412,38 +412,29 @@ close(int fd) {
 
 // 인자로 받은 buffer의 주소가 유효한지 검사
 void check_valid_buffer(void *buffer, unsigned size, void *esp, bool to_write) {
-	int i, num_of_page;		// buffer ~ buffer + size가 몇 페이지인지
-	// buffer, buffer+size의 주소가 vme의 vaddr에 저장될 때
-	// 아래와 같은 형식으로 저장됨
-	// vpn을 찾는 과정임
-	void *begin = pg_round_down(buffer);
-	void *end = pg_round_down(buffer + size);
 	struct vm_entry *vme;
+	unsigned i;		// for loop을 위해. size가 unsigned이므로 그에 맞게 자료형 설정
+	void *addr = buffer;
 
-	// 페이지 수를 찾는다
-	num_of_page = ((int)(begin - end) / PGSIZE) + 1;
-	for(i = 0; i < num_of_page; i++) {
-		vme = check_address(buffer + (PGSIZE * i), esp);
-		// 해당 주소에 vme가 없거나, writable이 false이면 강종
-		// (강제 종료라는 뜻ㅎ)
-		if(NULL == vme || (false == vme->writable))
-			exit(-1);
+	// check_address로 주소 유효성 검사. 쓰기 가능 여부 판단
+	for(i = 0; i < size; i++) {
+		vme = check_address(addr, esp);
+
+		if(NULL != vme && to_write) 
+			if(false == vme->writable)
+				exit(-1);
+
+		addr++;
 	}
 }	
 
+// str의 모든 문자 하나하나에 대해서 주소 검사를 함
 void check_valid_string(const void *str, void *esp) {
-	int i, num_of_page;		// str시작 ~ str의 마지막글자가 몇 페이지인지
-	void *begin = pg_round_down(str);
-	void *end = pg_round_down(str + strlen((char *)str));
-	struct vm_entry *vme;
-
-	// 페이지 수를 찾는다
-	num_of_page = ((int)(begin - end) / PGSIZE) + 1;
-	for(i = 0; i < num_of_page; i++) {
-		vme = check_address(str + (PGSIZE * i), esp);
-		// 해당 주소에 vme가 없으면 강종(강제 종료라는 뜻ㅎ)
-		if(NULL == vme)
-			exit(-1);
+	check_address((void *)str, esp);
+	// 널 문자를 만날 때까지 검사
+	while(*(char *)str != '\0') {
+		str += 1;
+		check_address((void *)str, esp);
 	}
 }
 

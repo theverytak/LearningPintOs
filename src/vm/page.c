@@ -29,11 +29,11 @@ bool insert_vme(struct hash *vm, struct vm_entry *vme) {
 		return false;
 
 	// hash_insert는 vme가 vm에 존재하면 NULL이 아닌 값을 리턴함
-	// 그러므로 insert성공 == hash_insert가 NULL을 리턴
-	if(NULL != hash_insert(vm, &vme->elem))
-		return false;
+	// 그러므로 insert성공 => hash_insert가 NULL을 리턴
+	if(NULL == hash_insert(vm, &vme->elem))
+		return true;
 
-	return true;
+	return false;
 }
 
 bool delete_vme(struct hash *vm, struct vm_entry *vme) {
@@ -42,10 +42,10 @@ bool delete_vme(struct hash *vm, struct vm_entry *vme) {
 
 	// hash_delete는 vme를 vm에서 찾고, 있으면 삭제 후 NULL이
 	// 아닌 값을 리턴함
-	if(NULL == hash_delete(vm, &vme->elem))
-		return false;
+	if(NULL != hash_delete(vm, &vme->elem))
+		return true;
 
-	return true;
+	return false;
 }
 
 struct vm_entry *find_vme(void *vaddr) {
@@ -55,6 +55,7 @@ struct vm_entry *find_vme(void *vaddr) {
 	vme.vaddr = pg_round_down(vaddr);		// 인자 vaddr에서 vpn을 추출  
 
 	elem = hash_find(&thread_current()->vm, &vme.elem);
+	// 못찾았으면 NULL리턴
 	if(NULL == elem)
 		return NULL;
 	
@@ -67,21 +68,21 @@ void vm_destroy(struct hash *vm) {
 }
 
 void vm_destroy_func(struct hash_elem *e, void *aux UNUSED) {
-	if(NULL == e)
-		return;
-	struct vm_entry *vme = hash_entry(e, struct vm_entry, elem);
+	if(NULL != e) {
+		struct vm_entry *vme = hash_entry(e, struct vm_entry, elem);
 
-	// 실제로 탑재 된 경우
-	if(true == vme->is_loaded) {
-		struct thread *t = thread_current();
-		// pagedir에서 검색해서 물리 페이지를 해제함
-		palloc_free_page(pagedir_get_page(t->pagedir, vme->vaddr));
-		// pagedir에서 vaddr의 맵핑을 해제
-		pagedir_clear_page(t->pagedir, vme->vaddr);
+		// 실제로 탑재 된 경우
+		if(true == vme->is_loaded) {
+			struct thread *t = thread_current();
+			// pagedir에서 검색해서 물리 페이지를 해제함
+			palloc_free_page(pagedir_get_page(t->pagedir, vme->vaddr));
+			// pagedir에서 vaddr의 맵핑을 해제
+			pagedir_clear_page(t->pagedir, vme->vaddr);
+		}
+
+		// load_segment에서 malloc을 사용하기 때문에 free로 해제함
+		free(vme);
 	}
-
-	// load_segment에서 malloc을 사용하기 때문에 free로 해제함
-	free(vme);
 }
 
 

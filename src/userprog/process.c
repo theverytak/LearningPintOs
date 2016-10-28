@@ -24,6 +24,9 @@
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
+// 아래 두 함수는 vm관련 함수임
+bool load_file(void *kaddr, struct vm_entry *vme); 
+bool handle_mm_fault(struct vm_entry *vme); 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -753,7 +756,8 @@ bool load_file(void *kaddr, struct vm_entry *vme) {
 	// vme의 file에서 offset만큼 읽는다. 읽을 때는 read_bytes만큼 읽고,
 	// 그 결과는 kaddr(물리 페이지)에 저장된다.
 	// file_read_at의 리턴과 vme->read_bytes를 비교한다
-	if(vme->read_bytes != file_read_at(vme->file, kaddr, 
+	// 그리고 아래는 좌 우가 unsigned, signed이므로 좌변을 (int)캐스팅
+	if((int)vme->read_bytes != file_read_at(vme->file, kaddr, 
 																		 vme->read_bytes, vme->offset)) {
 	palloc_free_page(kaddr);
 	return false;
