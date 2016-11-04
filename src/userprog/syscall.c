@@ -462,6 +462,9 @@ int mmap(int fd, void *addr) {
 	// 4KB의 시작이라는 뜻
 	if(0 != pg_ofs(addr))
 		return -1;
+	// for mmap-null test :(
+	if(0 == addr)
+		return -1;
 	
 	// free는 munmap()에서 함
 	mmp_f = (struct mmap_file *)malloc(sizeof(struct mmap_file));
