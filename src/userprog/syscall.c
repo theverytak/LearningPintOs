@@ -534,7 +534,7 @@ void munmap(int mapid) {
 				e != list_end(&thread_current()->mmap_list);
 				e = list_next(e)) {
 			struct mmap_file *mf = list_entry(e, struct mmap_file, elem);
-			if(mapid == mmp_f->mapid) {
+			if(mapid == mf->mapid) {
 				mmp_f = mf;
 				break;
 			}
