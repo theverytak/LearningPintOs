@@ -520,13 +520,15 @@ void munmap(int mapid) {
 	if(-1 == mapid) {
 		for(e = list_begin(&thread_current()->mmap_list);
 				e != list_end(&thread_current()->mmap_list);
-				e = list_next(e)) {
+				/*e = list_next(e)*/) {
 			mmp_f = list_entry(e, struct mmap_file, elem);
-			if(NULL == mmp_f)
+			if(NULL != mmp_f) {
+				do_munmap(mmp_f);
+				e = list_remove(&mmp_f->elem);
+				free(mmp_f);
+			}
+			else
 				break;
-			do_munmap(mmp_f);
-			list_remove(&mmp_f->elem);
-			free(mmp_f);
 		}
 	}
 	else {		// 특정 mapid의 mmap_file를 삭제
