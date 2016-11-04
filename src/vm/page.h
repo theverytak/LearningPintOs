@@ -30,6 +30,13 @@ struct vm_entry {
 	struct hash_elem elem;				// 해시 테이블 elem
 };
 
+struct mmap_file {
+	int mapid;										// 맵핑된 아이디
+	struct file* file;						// 맵핑된 파일
+	struct list_elem elem;				// struct thread의 mmap_list의 원소
+	struct list vme_list;					// mmap_file에 해당하는 vme원소들
+};
+
 void vm_init(struct hash *vm);
 bool insert_vme(struct hash *vm, struct vm_entry *vme); 
 bool delete_vme(struct hash *vm, struct vm_entry *vme);

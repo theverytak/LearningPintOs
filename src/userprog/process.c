@@ -80,6 +80,7 @@ start_process (void *file_name_)
 	int count = 0; // 인자의 갯수를 저장
 
 	vm_init(&thread_current()->vm);
+	list_init(&thread_current()->mmap_list);
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -195,6 +196,10 @@ process_exit (void)
 		process_close_file(cur_fd_index - 1);
 		cur_fd_index--;
 	}
+
+	// 모든 mmap_file을 삭제
+	munmap(-1);
+
 	palloc_free_page(cur->fdt);	// get_page한거 free
 	vm_destroy(&cur->vm);
 
@@ -733,6 +738,8 @@ bool handle_mm_fault(struct vm_entry *vme) {
 			vme->is_loaded = install_page(vme->vaddr, phys_addr, vme->writable);
 			break;
 		case VM_FILE :
+			loaded = load_file(phys_addr, vme);
+			vme->is_loaded = install_page(vme->vaddr, phys_addr, vme->writable);
 			break;
 		case VM_ANON :
 			break;

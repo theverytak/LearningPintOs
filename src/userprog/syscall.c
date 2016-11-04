@@ -31,6 +31,9 @@ int write(int fd, void *buffer, unsigned size);
 void seek(int fd, unsigned position); 
 unsigned tell(int fd);
 void close(int fd);
+int mmap(int fd, void *addr);
+void munmap(int mapid);
+void do_munmap(struct mmap_file *mmp_f); 
 
 void
 syscall_init (void) 
@@ -435,6 +438,117 @@ void check_valid_string(const void *str, void *esp) {
 	while(*(char *)str != '\0') {
 		str += 1;
 		check_address((void *)str, esp);
+	}
+}
+
+
+int mmap(int fd, void *addr) {
+	struct mmap_file *mmp_f;
+	size_t offset = 0;						// addr(file의 시작주소)로 부터의 offset
+	static int new_mapid = 0;			// mapid를 위한 변수
+	// addr의 4KB allign여부를 검사. pg_ofs가 0이면 페이지의 시작이므로
+	// 4KB의 시작이라는 뜻
+	if(0 != pg_ofs(addr))
+		return -1;
+	
+	// free는 munmap()에서 함
+	mmp_f = (struct mmap_file *)malloc(sizeof(struct mmap_file));
+	if(NULL == mmp_f)
+		return -1;			// 본 함수에서의 에러코드는 -1
+
+	// 아래는 생성 후 초기화하는 과정임
+	memset(mmp_f, 0, sizeof(struct mmap_file));
+	list_init(&mmp_f->vme_list);
+	mmp_f->file = file_reopen(process_get_file(fd));
+	// fd번째 file을 reopen하는 과정에서 에러가 생겼으면 -1
+	if(NULL == mmp_f->file)
+		return -1;
+	//mapid 부여
+	mmp_f->mapid = new_mapid++;
+	// 현재 스레드의 mmap_list에 삽입
+	list_push_back(&thread_current()->mmap_list, &mmp_f->elem);
+
+	// 아래는 vme를 생성하고 초기화하는 과정임
+	// load_segment()에서 따옴
+	// 우선 디스크의 file의 길이를 얻어서 그 길이만큼 돌며 vme를 생성
+	int mmp_f_length = file_length(mmp_f->file);
+	while (mmp_f_length > 0) {
+		if(find_vme(addr))		// 이미 존재하면 -1
+			return -1;
+
+		// vm_entry를 생성, 멤버변수(오프셋, 사이즈,...) 설정
+		struct vm_entry* vme = (struct vm_entry *)malloc(sizeof(struct vm_entry));
+		vme->type = VM_FILE;
+		vme->vaddr = addr;
+		vme->offset = offset;
+		vme->read_bytes = mmp_f_length < PGSIZE ? mmp_f_length : PGSIZE;	// 최대 PGSIZE
+		vme->zero_bytes = 0;
+		vme->writable = true;
+		vme->file = mmp_f->file;
+		vme->is_loaded = false;
+
+		// 생성한 vm_entry를 해시 테이블에 추가
+		insert_vme(&thread_current()->vm, vme);
+		// mmap_file list의 원소로 추가
+		list_push_back(&mmp_f->vme_list, &vme->mmap_elem);
+
+		// while 문을 위한 변수들 업데이트, 한 페이지 단위로 맵핑하기 때문에 아래와 같다
+		mmp_f_length -= PGSIZE;
+		addr += PGSIZE;
+		offset += PGSIZE;
+	}
+
+	return mmp_f->mapid;
+}
+
+void munmap(int mapid) {
+	struct mmap_file *mmp_f = NULL;
+	struct list_elem *e;
+	// mapid가 -1이면 mmap_file전부 삭제
+	if(-1 == mapid) {
+		for(e = list_begin(&thread_current()->mmap_list);
+				e != list_end(&thread_current()->mmap_list);
+				e = list_next(e)) {
+			mmp_f = list_entry(e, struct mmap_file, elem);
+			if(NULL == mmp_f)
+				break;
+			do_munmap(mmp_f);
+			list_remove(&mmp_f->elem);
+			free(mmp_f);
+		}
+	}
+	else {		// 특정 mapid의 mmap_file를 삭제
+		for(e = list_begin(&thread_current()->mmap_list);
+				e != list_end(&thread_current()->mmap_list);
+				e = list_next(e)) {
+			struct mmap_file *mf = list_entry(e, struct mmap_file, elem);
+			if(mapid == mmp_f->mapid) {
+				mmp_f = mf;
+				break;
+			}
+		}
+		// 못찾았으면 함수 종료
+		if(NULL == mmp_f)
+			return;
+
+		do_munmap(mmp_f);
+		list_remove(&mmp_f->elem);
+		free(mmp_f);
+	}
+}
+
+void do_munmap(struct mmap_file *mmp_f) {
+	struct list_elem *e;
+	// e = list_next(e)를 안하는 이유는 for loop 내부에서 list_remove를 하기 때문
+	for(e = list_begin(&mmp_f->vme_list); e != list_end(&mmp_f->vme_list);) {
+		struct vm_entry *vme = list_entry(e, struct vm_entry, mmap_elem);
+		// 갱신된 적 있으면 동기화 하고 삭제
+		if(vme->is_loaded && pagedir_is_dirty(thread_current()->pagedir, vme->vaddr)) {
+			file_write_at(vme->file, vme->vaddr, vme->read_bytes, vme->offset);
+		}
+		vme->is_loaded = false;
+		e = list_remove(e);
+		delete_vme(&thread_current()->vm, vme);
 	}
 }
 

@@ -99,6 +99,7 @@ struct thread
     struct list_elem elem;              /* List element. */
 	  struct thread* parent; 						  // 부모를 향한 포인터
 		struct list_elem me_as_child;			  // 나의 부모의 list에 들어가기 위하여
+		struct list mmap_list;							// mmap_file들의 list
 		struct list childs;									// 나의 자식들을 위한 list
 		bool is_loaded;											// 메모리 탑재 유무
 		bool is_ended;											// 종료 유무
