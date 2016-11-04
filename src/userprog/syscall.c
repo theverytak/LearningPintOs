@@ -170,6 +170,18 @@ syscall_handler (struct intr_frame *f UNUSED)
 				close(arg[0]);
 				break;
 			}
+		 case SYS_MMAP :
+			{
+				get_argument(esp, arg, 2);
+				f->eax = mmap(arg[0], (void *)arg[1]);
+				break;
+			}
+		 case SYS_MUNMAP :
+			{
+				get_argument(esp, arg, 1);
+				munmap(arg[0]);
+				break;
+			}
 	}
 
 //  printf ("system call!\n");
