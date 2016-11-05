@@ -16,6 +16,7 @@
 #define VM_FILE 1
 #define VM_ANON 2
 
+// 가상메모리 entry
 struct vm_entry {
 	uint8_t type;									// VM_BIN, VM_FILE, VM_ANON의 타입
 	void *vaddr;									// vm_entry의 가상페이지 번호
@@ -30,11 +31,20 @@ struct vm_entry {
 	struct hash_elem elem;				// 해시 테이블 elem
 };
 
+// mmaping 파일
 struct mmap_file {
 	int mapid;										// 맵핑된 아이디
 	struct file* file;						// 맵핑된 파일
 	struct list_elem elem;				// struct thread의 mmap_list의 원소
 	struct list vme_list;					// mmap_file에 해당하는 vme원소들
+};
+
+// page 구조체
+struct page {
+	void *kaddr;									// 물리페이지의 시작주소
+	struct vm_entry *vme;					// 물리페이지에 사상된 가상 주소의 vme
+	struct thread *thread;				// 페이지를 사용중인 thread
+	struct list_elem lru;					// 페이지를 관리하는 list의 원소로서
 };
 
 void vm_init(struct hash *vm);
@@ -44,5 +54,8 @@ struct vm_entry *find_vme(void *vaddr);
 void vm_destroy(struct hash *vm);
 void vm_destroy_func(struct hash_elem *e, void *aux UNUSED);
 bool load_file(void *kaddr, struct vm_entry *vme); 
+struct page* alloc_page(enum palloc_flags flags);
+void free_page(void *kaddr);
+void __free_page(struct page *page);
 
 #endif // _VM_PAGE_H_

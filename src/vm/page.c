@@ -1,5 +1,6 @@
 // page.c
 #include "page.h"
+#include "frame.h"
 
 static unsigned vm_hash_func (const struct hash_elem *e, void *aux) {
 	// hash_elem인 e를 이용해 vm_entry를 찾고, 해당 vm_entry의 가상
@@ -84,5 +85,53 @@ void vm_destroy_func(struct hash_elem *e, void *aux UNUSED) {
 		free(vme);
 	}
 }
+
+struct page* alloc_page(enum palloc_flags flags) {
+	struct page *page;
+	page = (struct page *)malloc(sizeof(struct page));			// page구조체를 할당
+	if(NULL == page)																				// malloc실패시
+		return NULL;
+	page->thread = thread_current();												// page구조체 초기화
+	page->kaddr = NULL;
+	page->vme = NULL;
+	lock_acquire(&lru_list_lock);
+	add_page_to_lru_list(page);
+	lock_release(&lru_list_lock);
+
+	// palloc_get_page로 물리 페이지 할당
+	page->kaddr = palloc_get_page(flags);
+	if(NULL == page->kaddr) {											// 아래는 메모리가 부족할 경우임
+		page->kaddr = try_to_free_pages(flags);			// 우선 메모리를 확보
+	}
+	
+	return page;
+}
+	
+// 시작 주소가 kaddr인 물리 페이지를 삭제
+// 그런거 lru_list에서 못찾으면 아무것도 안함
+void free_page(void *kaddr) {
+	struct list_elem *e;
+	lock_acquire(&lru_list_lock);		// 아래에서 list_remove를 하므로 lock
+	for(e = list_begin(&lru_list); e != list_end(&lru_list); e = list_next(e)) {
+		struct page *page = list_entry(e, struct page, lru);
+		// 찾으면 _free_page하고 for문 퇴장
+		if(kaddr == page->kaddr) {
+			__free_page(page);
+			break;
+		}
+
+	}
+
+	lock_release(&lru_list_lock);
+}
+
+// 물리 페이지 page를 해제
+void __free_page(struct page *page) {
+	del_page_from_lru_list(page);		// lru_list에서 삭제
+	palloc_free_page(page->kaddr);	// alloc_page에서 할당한 것 삭제
+	pagedir_clear_page(page->thread->pagedir, page->vme->vaddr);	// pagedir해제
+	free(page);											// 역시 해제
+}
+
 
 

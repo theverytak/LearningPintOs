@@ -556,16 +556,24 @@ void munmap(int mapid) {
 
 void do_munmap(struct mmap_file *mmp_f) {
 	struct list_elem *e;
+	struct thread *t = thread_current();
 	// e = list_next(e)를 안하는 이유는 for loop 내부에서 list_remove를 하기 때문
 	for(e = list_begin(&mmp_f->vme_list); e != list_end(&mmp_f->vme_list);) {
 		struct vm_entry *vme = list_entry(e, struct vm_entry, mmap_elem);
-		// 갱신된 적 있으면 동기화 하고 삭제
-		if(vme->is_loaded && pagedir_is_dirty(thread_current()->pagedir, vme->vaddr)) {
+		if(vme->is_loaded) {
+			// dirty면 file 동기화
+			if(pagedir_is_dirty(t->pagedir, vme->vaddr)) {
+			lock_acquire(&filesys_lock);
 			file_write_at(vme->file, vme->vaddr, vme->read_bytes, vme->offset);
+			lock_release(&filesys_lock);
+			}
+			// page 해제
+			free_page(pagedir_get_page(t->pagedir, vme->vaddr));
+			pagedir_clear_page(t->pagedir, vme->vaddr);
 		}
-		vme->is_loaded = false;
 		e = list_remove(e);
-		delete_vme(&thread_current()->vm, vme);
+		delete_vme(&t->vm, vme);
+		free(vme);
 	}
 }
 

@@ -568,14 +568,15 @@ setup_stack (void **esp)
   uint8_t *kpage;
   bool success = false;
 
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+	struct page *page = alloc_page(PAL_USER | PAL_ZERO);
+	kpage = page->kaddr;
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
         *esp = PHYS_BASE;
       else
-        palloc_free_page (kpage);
+				free_page(kpage);
     }
 
 	// vme만들고 초기화, 해시 테이블에 삽입
@@ -725,8 +726,10 @@ void process_close_file(int fd) {
 
 bool handle_mm_fault(struct vm_entry *vme) {
 	// 물리 메모리에 페이지 할당 후 실패시 false리턴
-	void* phys_addr = palloc_get_page(PAL_USER);
-	bool loaded = false;
+	void* phys_addr;
+	struct page* page = alloc_page(PAL_USER);
+	phys_addr = page->kaddr;
+	bool success = false;
   if (NULL == phys_addr)
     return false;
 
@@ -734,27 +737,31 @@ bool handle_mm_fault(struct vm_entry *vme) {
 		// 물리 메모리에 로드
 		// 그 후 가상 ~ 물리 페이지 간 연결
 		case VM_BIN :
-			loaded = load_file(phys_addr, vme);
-			vme->is_loaded = install_page(vme->vaddr, phys_addr, vme->writable);
+			success = load_file(phys_addr, vme);
 			break;
 		case VM_FILE :
-			loaded = load_file(phys_addr, vme);
-			vme->is_loaded = install_page(vme->vaddr, phys_addr, vme->writable);
+			success = load_file(phys_addr, vme);
 			break;
 		case VM_ANON :
+			swap_in(vme->swap_slot, phys_addr);
+			success = true;
 			break;
 		default :
 			return false;
 	}
-
 	// 물리 메모리에 탑재 실패했으면 false리턴
-	if(false == loaded)
+	if(false == success) {
+		free_page(phys_addr);
 		return false;
+	}
 	// 맵핑 실패했으면 false
-	if(false == vme->is_loaded)
-		palloc_free_page(phys_addr);
+	if(false == install_page(vme->vaddr, phys_addr, vme->writable)) {
+		free_page(phys_addr);
+		return false;
+	}
+	vme->is_loaded = true;
 
-	return vme->is_loaded;
+	return true;
 }
 
 
