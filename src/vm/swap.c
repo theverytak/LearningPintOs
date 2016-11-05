@@ -4,9 +4,13 @@
 
 void swap_init (size_t size) {
 	swap_block = block_get_role(BLOCK_SWAP);		// 스왑 블럭을 가져옴
-	lock_init(&swap_lock);											// lock 초기화
+	if(NULL == swap_block)
+		return;
 	swap_bitmap = bitmap_create(size);					// bitmap생성
+	if(NULL == swap_bitmap)
+		return;
 	bitmap_set_all(swap_bitmap, 0);							// 0으로 초기화
+	lock_init(&swap_lock);											// lock 초기화
 }
 
 // swap block -> memory

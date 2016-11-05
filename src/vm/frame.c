@@ -11,14 +11,16 @@ void lru_list_init(void) {						// lru_list, lru_list_lock, lru_clock초기화
 
 // page를 lru뒤에 삽입
 void add_page_to_lru_list(struct page *page) { 
-  lock_acquire (&lru_list_lock);	// 공유 list는 항상 lock
+  //lock_acquire (&lru_list_lock);	// 공유 list는 항상 lock
 	list_push_back(&lru_list, &page->lru);
-  lock_release (&lru_list_lock);
+  //lock_release (&lru_list_lock);
 }
 
 // lru_list에서 page를 삭제
 void del_page_from_lru_list(struct page *page) {
+  //lock_acquire (&lru_list_lock);	// 공유 list는 항상 lock
 	list_remove(&page->lru);
+  //lock_release (&lru_list_lock);
 }
 
 static struct list_elem *get_next_lru_clock() {
