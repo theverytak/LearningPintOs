@@ -515,41 +515,23 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
          and zero the final PAGE_ZERO_BYTES bytes. */
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
-			/* 아래 부분은 주석 처리를 함. vm_entry를 사용하기 때문
-      // Get a page of memory. 
-      uint8_t *kpage = palloc_get_page (PAL_USER);
-      if (kpage == NULL)
-        return false;
-
-      // Load this page. 
-      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
-0
-      // Add the page to the process's address space. 
-      if (!install_page (upage, kpage, writable)) 
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
-			여기 까지 주석처리함.*/
 
 			// vm_entry를 생성, 멤버변수(오프셋, 사이즈,...) 설정
 			struct vm_entry* vme = (struct vm_entry *)malloc(sizeof(struct vm_entry));
+			if(NULL == vme)
+				return false;
 			vme->type = VM_BIN;
 			vme->vaddr = upage;
 			vme->offset = ofs;
-			vme->read_bytes = read_bytes;
-			vme->zero_bytes = zero_bytes;
+			vme->read_bytes = page_read_bytes;
+			vme->zero_bytes = page_zero_bytes;
 			vme->writable = writable;
 			vme->is_loaded = false;
 			vme->file = file;
 			
 			// 생성한 vm_entry를 해시 테이블에 추가
-			insert_vme(&thread_current()->vm, vme);
+			if(!insert_vme(&thread_current()->vm, vme))
+				return false;
 
       /* Advance. */
       read_bytes -= page_read_bytes;
@@ -773,8 +755,8 @@ bool load_file(void *kaddr, struct vm_entry *vme) {
 	// 그리고 아래는 좌 우가 unsigned, signed이므로 좌변을 (int)캐스팅
 	if((int)vme->read_bytes != file_read_at(vme->file, kaddr, 
 																		 vme->read_bytes, vme->offset)) {
-	palloc_free_page(kaddr);
-	return false;
+		palloc_free_page(kaddr);
+		return false;
 	}
 	// 남는 부분은 0으로 채운다
 	memset(kaddr + vme->read_bytes, 0, vme->zero_bytes);

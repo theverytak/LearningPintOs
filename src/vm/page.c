@@ -127,9 +127,9 @@ void free_page(void *kaddr) {
 
 // 물리 페이지 page를 해제
 void __free_page(struct page *page) {
+	pagedir_clear_page(page->thread->pagedir, page->vme->vaddr);	// pagedir해제
 	del_page_from_lru_list(page);		// lru_list에서 삭제
 	palloc_free_page(page->kaddr);	// alloc_page에서 할당한 것 삭제
-	pagedir_clear_page(page->thread->pagedir, page->vme->vaddr);	// pagedir해제
 	free(page);											// 역시 해제
 }
 
