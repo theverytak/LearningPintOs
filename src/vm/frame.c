@@ -23,6 +23,24 @@ void del_page_from_lru_list(struct page *page) {
   //lock_release (&lru_list_lock);
 }
 
+// for debug..
+// print all pages in lru_list
+void print_lru_list(void) {
+	printf("*****************begin************************\n");
+	struct list_elem *e;
+	int i = 0;
+	for(e = list_begin(&lru_list); e != list_end(&lru_list); e = list_next(e)) {
+		struct page *page = list_entry(e, struct page, lru);
+		printf("@@@@@@@@@@@@@@@@@@@@@@@@@\n");
+		printf("number %d\n", i++);
+		printf("owner : %s\n", page->thread->name);
+		printf("page->kaddr : %p\n", page->kaddr);
+		printf("page->vme->vaddr :%p\n", page->vme->vaddr);
+		printf("@@@@@@@@@@@@@@@@@@@@@@@@@\n");
+	}
+	printf("********************end***********************\n");
+}
+
 static struct list_elem *get_next_lru_clock() {
 	// lru_clock이 NULL이면 
 	if(NULL == lru_clock)

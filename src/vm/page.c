@@ -26,8 +26,8 @@ void vm_init(struct hash *vm) {
 }
 
 bool insert_vme(struct hash *vm, struct vm_entry *vme) {
-	if(NULL == vm || NULL == vme)
-		return false;
+	//if(NULL == vm || NULL == vme)
+		//return false;
 
 	// hash_insert는 vme가 vm에 존재하면 NULL이 아닌 값을 리턴함
 	// 그러므로 insert성공 => hash_insert가 NULL을 리턴
@@ -38,8 +38,8 @@ bool insert_vme(struct hash *vm, struct vm_entry *vme) {
 }
 
 bool delete_vme(struct hash *vm, struct vm_entry *vme) {
-	if(NULL == vm || NULL == vme)
-		return false;
+	//if(NULL == vm || NULL == vme)
+		//return false;
 
 	// hash_delete는 vme를 vm에서 찾고, 있으면 삭제 후 NULL이
 	// 아닌 값을 리턴함
@@ -103,7 +103,6 @@ struct page* alloc_page(enum palloc_flags flags) {
 	if(NULL == page->kaddr) {											// 아래는 메모리가 부족할 경우임
 		page->kaddr = try_to_free_pages(flags);			// 우선 메모리를 확보
 	}
-	
 	return page;
 }
 	
@@ -116,10 +115,10 @@ void free_page(void *kaddr) {
 		struct page *page = list_entry(e, struct page, lru);
 		// 찾으면 _free_page하고 for문 퇴장
 		if(kaddr == page->kaddr) {
+			//TODO 현재 문제는 아래 함수에서 exit(-1)을 호출
 			__free_page(page);
 			break;
 		}
-
 	}
 
 	lock_release(&lru_list_lock);
