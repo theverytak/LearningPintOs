@@ -570,27 +570,28 @@ setup_stack (void **esp)
 
 	struct page *page = alloc_page(PAL_USER | PAL_ZERO);
 	kpage = page->kaddr;
-  if (kpage != NULL) 
-    {
+  if (kpage != NULL) {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
+      if (success) {
         *esp = PHYS_BASE;
+				// vme만들고 초기화, 해시 테이블에 삽입
+				struct vm_entry *vme = (struct vm_entry *)
+															  malloc(sizeof(struct vm_entry));
+				if(vme == NULL)		// malloc 오류인 경우
+					return false;
+				// 아래는 초기화 후 삽입 부분
+				vme->type = VM_BIN;
+				vme->vaddr = ((uint8_t*)PHYS_BASE) - PGSIZE;
+				vme->writable = true;
+				vme->is_loaded = true;
+				insert_vme(&thread_current()->vm, vme);
+				page->vme = vme;
+			} // end of inner if
       else
 				free_page(kpage);
-    }
-
-	// vme만들고 초기화, 해시 테이블에 삽입
-	struct vm_entry *vme = (struct vm_entry*)malloc(sizeof(struct vm_entry));
-	vme->type = VM_ANON;
-	vme->vaddr = ((uint8_t*)PHYS_BASE) - PGSIZE;
-	vme->writable = success;
-	vme->is_loaded = success;
-	vme->file = NULL;
-	vme->offset = 0;
-	vme->read_bytes = 0;
-	vme->zero_bytes = 0;
-
-	insert_vme(&thread_current()->vm, vme);
+  } // end of outer if
+	//printf("in setup_stack....\n");
+	//print_lru_list();
 
   return success;
 }
@@ -730,6 +731,7 @@ bool handle_mm_fault(struct vm_entry *vme) {
 	struct page* page = alloc_page(PAL_USER);
 	phys_addr = page->kaddr;
 	bool success = false;
+	page->vme = vme;
   if (NULL == phys_addr)
     return false;
 
@@ -761,6 +763,8 @@ bool handle_mm_fault(struct vm_entry *vme) {
 	}
 	vme->is_loaded = true;
 
+	//printf("in handle_mm_fault....\n");
+	//print_lru_list();
 	return true;
 }
 
@@ -773,8 +777,8 @@ bool load_file(void *kaddr, struct vm_entry *vme) {
 	// 그리고 아래는 좌 우가 unsigned, signed이므로 좌변을 (int)캐스팅
 	if((int)vme->read_bytes != file_read_at(vme->file, kaddr, 
 																		 vme->read_bytes, vme->offset)) {
-	palloc_free_page(kaddr);
-	return false;
+		palloc_free_page(kaddr);
+		return false;
 	}
 	// 남는 부분은 0으로 채운다
 	memset(kaddr + vme->read_bytes, 0, vme->zero_bytes);

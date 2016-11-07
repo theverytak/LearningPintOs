@@ -196,7 +196,7 @@ syscall_handler (struct intr_frame *f UNUSED)
  
 struct vm_entry *check_address(void *addr, void* esp /*Unused*/) 
 {
-	if((uint32_t)addr <= 0x8048000 || (uint32_t)addr >= 0xc0000000) 
+	if((uint32_t)addr < 0x8048000 || (uint32_t)addr >= 0xc0000000) 
 		exit(-1);
 
 	return find_vme(addr);
@@ -465,7 +465,9 @@ int mmap(int fd, void *addr) {
 	// for mmap-null test :(
 	if(0 == addr)
 		return -1;
-	
+	if(false == is_user_vaddr(addr))
+		return -1;
+
 	// free는 munmap()에서 함
 	mmp_f = (struct mmap_file *)malloc(sizeof(struct mmap_file));
 	if(NULL == mmp_f)
@@ -533,7 +535,7 @@ void munmap(int mapid) {
 			else
 				break;
 		}
-	}
+	}	// if ends here
 	else {		// 특정 mapid의 mmap_file를 삭제
 		for(e = list_begin(&thread_current()->mmap_list);
 				e != list_end(&thread_current()->mmap_list);
@@ -551,8 +553,8 @@ void munmap(int mapid) {
 		do_munmap(mmp_f);
 		list_remove(&mmp_f->elem);
 		free(mmp_f);
-	}
-}
+	}	// else ends here
+}	// end of munmap
 
 void do_munmap(struct mmap_file *mmp_f) {
 	struct list_elem *e;
@@ -563,18 +565,18 @@ void do_munmap(struct mmap_file *mmp_f) {
 		if(vme->is_loaded) {
 			// dirty면 file 동기화
 			if(pagedir_is_dirty(t->pagedir, vme->vaddr)) {
-			lock_acquire(&filesys_lock);
-			file_write_at(vme->file, vme->vaddr, vme->read_bytes, vme->offset);
-			lock_release(&filesys_lock);
+				lock_acquire(&filesys_lock);
+				file_write_at(vme->file, vme->vaddr, vme->read_bytes, vme->offset);
+				lock_release(&filesys_lock);
 			}
 			// page 해제
 			free_page(pagedir_get_page(t->pagedir, vme->vaddr));
 			pagedir_clear_page(t->pagedir, vme->vaddr);
-		}
+		} // end of outer if
 		e = list_remove(e);
 		delete_vme(&t->vm, vme);
 		free(vme);
-	}
+	} // end of for....
 }
 
 

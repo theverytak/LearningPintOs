@@ -152,17 +152,20 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
+	// fault_addr의 유효성 검사(check_address)
 	// fault_addr를 이용해 vme를 찾고, 
 	// fault handler를 호출한다.
 	// 이후에는 물리 메모리에 로드 여부를 검사한다.
+	check_address(fault_addr, f->esp);
 	if(not_present) {
 		struct vm_entry *vme = find_vme(fault_addr);
 		// vme가 NULL이면 해시 테이블에 없는 것 
 		if(NULL != vme)
 			loaded = handle_mm_fault(vme);
 	}
-	if(false == loaded)
+	if(false == loaded) {
 		exit(-1);
+	}
 	/* 아래 코드는 주석 처리함
 	exit(-1);				// 일단 이거 추가 과제 1 검사용
   // To implement virtual memory, delete the rest of the function
