@@ -2,19 +2,19 @@
 
 #include "vm/swap.h"
 
-void swap_init (size_t size) {
-	swap_block = block_get_role(BLOCK_SWAP);		// 스왑 블럭을 가져옴
-	if(NULL == swap_block)
-		return;
+void swap_init(size_t size) {
+	// 아래처럼 전역변수로 두고 사용하면 에러가 생김?
+	//swap_block = block_get_role(BLOCK_SWAP);		// 스왑 블럭을 가져옴
+	//ASSERT(NULL != swap_block);
 	swap_bitmap = bitmap_create(size);					// bitmap생성
-	if(NULL == swap_bitmap)
-		return;
+	ASSERT(NULL != swap_bitmap);
 	bitmap_set_all(swap_bitmap, 0);							// 0으로 초기화
 	lock_init(&swap_lock);											// lock 초기화
 }
 
 // swap block -> memory
 void swap_in (size_t used_index, void *kaddr) {
+	struct block *swap_block = block_get_role(BLOCK_SWAP); // 스왑블럭 가져옴
 	ASSERT(NULL != swap_block && NULL != swap_bitmap);
 	int i;					// for loop
 	lock_acquire(&swap_lock);
@@ -37,6 +37,7 @@ void swap_in (size_t used_index, void *kaddr) {
 // memory -> swap block
 // swap slot의 인덱스를 리턴
 size_t swap_out (void *kaddr) {
+	struct block *swap_block = block_get_role(BLOCK_SWAP);  // 스왑블럭 가져옴
 	ASSERT(NULL != swap_block && NULL != swap_bitmap);
 	int i;					// for loop
 	lock_acquire(&swap_lock);
@@ -57,6 +58,3 @@ size_t swap_out (void *kaddr) {
 	return swap_index;
 }
 	
-
-
-

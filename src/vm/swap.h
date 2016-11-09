@@ -16,7 +16,7 @@ size_t swap_out(void *kaddr);
 // 아래는 전역변수들
 struct lock swap_lock;				// 아래를 위한 lock
 struct bitmap *swap_bitmap;   // 비트맵 배열
-struct block *swap_block;			// 스왑 블럭을 가리킬 포인터
+//struct block *swap_block;			// 스왑 블럭을 가리킬 포인터
 
 
 #endif // _VM_SWAP_H_ 
