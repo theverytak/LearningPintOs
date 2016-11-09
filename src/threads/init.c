@@ -17,6 +17,8 @@
 #include "devices/rtc.h"
 #include "threads/interrupt.h"
 #include "threads/io.h"
+#include "vm/swap.h"
+#include "vm/frame.h"
 #include "threads/loader.h"
 #include "threads/malloc.h"
 #include "threads/palloc.h"
@@ -90,8 +92,6 @@ main (void)
   thread_init ();
   console_init ();  
 
-	swap_init();
-	lru_list_init();
   /* Greet user. */
   printf ("Pintos booting with %'"PRIu32" kB RAM...\n",
           init_ram_pages * PGSIZE / 1024);
@@ -116,6 +116,9 @@ main (void)
   exception_init ();
   syscall_init ();
 #endif
+
+	swap_init(8 * 1024);
+	lru_list_init();
 
   /* Start thread scheduler and enable interrupts. */
   thread_start ();

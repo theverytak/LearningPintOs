@@ -11,7 +11,7 @@ void lru_list_init(void) {						// lru_list, lru_list_lock, lru_clock초기화
 
 // page를 lru뒤에 삽입
 void add_page_to_lru_list(struct page *page) { 
-  //lock_acquire (&lru_list_lock);	// 공유 list는 항상 lock
+  //lock_acquire (&lru_list_lock);	// 공유 list는 항상 lock 근데 밖에서 해줌
 	list_push_back(&lru_list, &page->lru);
   //lock_release (&lru_list_lock);
 }
@@ -49,8 +49,11 @@ static struct list_elem *get_next_lru_clock() {
 	if(list_empty(&lru_list))
 		return NULL;
 	// 11시(마지막원소)이면 12시로 바꾸고 return
-	if(lru_clock == list_end(&lru_list)) 
+	// 여기서 좀 방황했는데, list_end는 마지막 원소가 아님
+	// 그래서 lru_clock->next를 검사함
+	if(lru_clock->next == list_end(&lru_list)) {
 		return lru_clock = list_begin(&lru_list);
+	}
 	
 	// 정상 케이스
 	lru_clock = list_next(lru_clock);
@@ -66,10 +69,11 @@ void *try_to_free_pages(enum palloc_flags flag) {
 	while(true) {
 		struct page *page = list_entry(lru_clock, struct page, lru);
 		lru_clock = get_next_lru_clock();
-
+	
 		// accessed bit 가 1이면 0으로 바꿈
-		if(pagedir_is_accessed(page->thread->pagedir, page->vme->vaddr))
+		if(pagedir_is_accessed(page->thread->pagedir, page->vme->vaddr)) {
 			pagedir_set_accessed(page->thread->pagedir, page->vme->vaddr, false);
+		}
 		// 0이면 해제
 		else {
 			//해제 시 타입별로 다름

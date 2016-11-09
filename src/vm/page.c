@@ -94,15 +94,15 @@ struct page* alloc_page(enum palloc_flags flags) {
 	page->thread = thread_current();												// page구조체 초기화
 	page->kaddr = NULL;
 	page->vme = NULL;
-	lock_acquire(&lru_list_lock);
-	add_page_to_lru_list(page);
-	lock_release(&lru_list_lock);
 
 	// palloc_get_page로 물리 페이지 할당
 	page->kaddr = palloc_get_page(flags);
 	if(NULL == page->kaddr) {											// 아래는 메모리가 부족할 경우임
 		page->kaddr = try_to_free_pages(flags);			// 우선 메모리를 확보
 	}
+	lock_acquire(&lru_list_lock);
+	add_page_to_lru_list(page);
+	lock_release(&lru_list_lock);
 	return page;
 }
 	
