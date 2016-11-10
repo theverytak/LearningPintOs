@@ -499,7 +499,7 @@ int mmap(int fd, void *addr) {
 		vme->vaddr = addr;
 		vme->offset = offset;
 		vme->read_bytes = mmp_f_length < PGSIZE ? mmp_f_length : PGSIZE;	// 최대 PGSIZE
-		vme->zero_bytes = 0;
+		vme->zero_bytes = PGSIZE - vme->read_bytes;
 		vme->writable = true;
 		vme->file = mmp_f->file;
 		vme->is_loaded = false;
