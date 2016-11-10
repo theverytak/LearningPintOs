@@ -1,7 +1,7 @@
 // frame.c
 #include "vm/frame.h"
 
-static struct list_elem *get_next_lru_clock();
+static struct list_elem *get_next_lru_clock(void);
 
 void lru_list_init(void) {						// lru_list, lru_list_lock, lru_clock초기화
 	list_init(&lru_list);
@@ -41,7 +41,7 @@ void print_lru_list(void) {
 	printf("********************end***********************\n");
 }
 
-static struct list_elem *get_next_lru_clock() {
+static struct list_elem *get_next_lru_clock(void) {
 	// lru_clock이 NULL이면 
 	if(NULL == lru_clock)
 		return NULL;

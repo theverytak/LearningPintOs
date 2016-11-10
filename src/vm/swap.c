@@ -3,9 +3,8 @@
 #include "vm/swap.h"
 
 void swap_init(size_t size) {
-	// 아래처럼 전역변수로 두고 사용하면 에러가 생김?
-	//swap_block = block_get_role(BLOCK_SWAP);		// 스왑 블럭을 가져옴
-	//ASSERT(NULL != swap_block);
+	swap_block = block_get_role(BLOCK_SWAP);		// 스왑 블럭을 가져옴
+	ASSERT(NULL != swap_block);
 	swap_bitmap = bitmap_create(size);					// bitmap생성
 	ASSERT(NULL != swap_bitmap);
 	bitmap_set_all(swap_bitmap, 0);							// 0으로 초기화
@@ -14,7 +13,6 @@ void swap_init(size_t size) {
 
 // swap block -> memory
 void swap_in (size_t used_index, void *kaddr) {
-	struct block *swap_block = block_get_role(BLOCK_SWAP); // 스왑블럭 가져옴
 	ASSERT(NULL != swap_block && NULL != swap_bitmap);
 	int i;					// for loop
 	lock_acquire(&swap_lock);
@@ -23,11 +21,9 @@ void swap_in (size_t used_index, void *kaddr) {
 		exit(-1);
 	bitmap_flip(swap_bitmap, used_index); // used_index의 bitmap을 0으로 변경
 
-	// page당 블럭 수. 사실 4000/500해서 8임
-	int blocks_in_a_page = PGSIZE / BLOCK_SECTOR_SIZE;
 	// 이제 disc의 스왑 블럭을 메모리로 읽음
-	for(i = 0; i < blocks_in_a_page; i++) {
-		block_read(swap_block, used_index * blocks_in_a_page + i,
+	for(i = 0; i < 8; i++) {
+		block_read(swap_block, used_index * 8 + i,
 							 kaddr + BLOCK_SECTOR_SIZE * i);
 	}
 
@@ -37,7 +33,6 @@ void swap_in (size_t used_index, void *kaddr) {
 // memory -> swap block
 // swap slot의 인덱스를 리턴
 size_t swap_out (void *kaddr) {
-	struct block *swap_block = block_get_role(BLOCK_SWAP);  // 스왑블럭 가져옴
 	ASSERT(NULL != swap_block && NULL != swap_bitmap);
 	int i;					// for loop
 	lock_acquire(&swap_lock);
@@ -46,11 +41,9 @@ size_t swap_out (void *kaddr) {
 	if(BITMAP_ERROR == swap_index) // bitmap_scan_and_flip중 에러발생시
 		return BITMAP_ERROR;
 
-	// page당 블럭 수. 사실 4000/500해서 8임
-	int blocks_in_a_page = PGSIZE / BLOCK_SECTOR_SIZE;
 	// 메모리에서 스왑 블럭으로
-	for(i = 0; i < blocks_in_a_page; i++) {
-		block_write(swap_block, swap_index * blocks_in_a_page + i,
+	for(i = 0; i < 8; i++) {
+		block_write(swap_block, swap_index * 8 + i,
 								kaddr + BLOCK_SECTOR_SIZE * i);
 	}
 
