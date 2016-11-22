@@ -197,15 +197,16 @@ process_exit (void)
 		process_close_file(cur_fd_index - 1);
 		cur_fd_index--;
 	}
+	palloc_free_page(cur->fdt);	// get_page한거 free
+	// file_close여기서 한다.
+	file_close(cur->run_file);
 
 	// 모든 mmap_file을 삭제
 	munmap(-1);
+	//free_all_pages(cur->tid);
 
-	palloc_free_page(cur->fdt);	// get_page한거 free
 	vm_destroy(&cur->vm);
 
-	// file_close여기서 한다.
-	file_close(cur->run_file);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -746,8 +747,6 @@ bool handle_mm_fault(struct vm_entry *vme) {
 	}
 	vme->is_loaded = true;
 
-	//printf("in handle_mm_fault....\n");
-	//print_lru_list();
 	return true;
 }
 
