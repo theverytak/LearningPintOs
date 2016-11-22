@@ -18,7 +18,7 @@ void swap_in (size_t used_index, void *kaddr) {
 	int i;					// for loop
 	lock_acquire(&swap_lock);
 	// used_index의 bitmap이 0(미사용)이면 swapin을 할 수 없음
-	ASSERT(0 == bitmap_test(swap_bitmap, used_index));
+	ASSERT(0 != bitmap_test(swap_bitmap, used_index));
 	bitmap_flip(swap_bitmap, used_index); // used_index의 bitmap을 0으로 변경
 
 	// 이제 disc의 스왑 블럭을 메모리로 읽음

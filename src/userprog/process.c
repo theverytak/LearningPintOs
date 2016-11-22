@@ -21,6 +21,7 @@
 #include "threads/vaddr.h"
 #include "vm/page.h"
 #include "vm/swap.h"
+#include "vm/frame.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -192,21 +193,10 @@ process_exit (void)
   uint32_t *pd;
 	int cur_fd_index = cur->next_fd;	// 현재 스레드의 fd인덱스를 저장.
 
-	// 아래는 fdt관련 파일 닫는 부분임. 
-	while(cur_fd_index > 2) { // 2까지만. 0, 1은 원래 있으니까.
-		process_close_file(cur_fd_index - 1);
-		cur_fd_index--;
-	}
-	palloc_free_page(cur->fdt);	// get_page한거 free
-	// file_close여기서 한다.
-	file_close(cur->run_file);
-
 	// 모든 mmap_file을 삭제
 	munmap(-1);
-	//free_all_pages(cur->tid);
-
+	free_all_pages(cur->tid);
 	vm_destroy(&cur->vm);
-
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -224,6 +214,15 @@ process_exit (void)
 		pagedir_activate (NULL);
 		pagedir_destroy (pd);
 	}
+
+	// 아래는 fdt관련 파일 닫는 부분임. 
+	while(cur_fd_index > 2) { // 2까지만. 0, 1은 원래 있으니까.
+		process_close_file(cur_fd_index - 1);
+		cur_fd_index--;
+	}
+	palloc_free_page(cur->fdt);	// get_page한거 free
+	// file_close여기서 한다.
+	file_close(cur->run_file);
 
 }
 
