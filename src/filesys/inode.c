@@ -4,6 +4,7 @@
 #include <round.h>
 #include <string.h>
 #include "filesys/filesys.h"
+#include "filesys/buffer_cache.h"
 #include "filesys/free-map.h"
 #include "threads/malloc.h"
 
@@ -220,15 +221,19 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       if (chunk_size <= 0)
         break;
 
+			bc_read(sector_idx, (void *)buffer, bytes_read, chunk_size, sector_ofs);
+
+			/*
+			아래는 bc_read구현으로 주석 처리함
       if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
         {
-          /* Read full sector directly into caller's buffer. */
+          // Read full sector directly into caller's buffer. 
           block_read (fs_device, sector_idx, buffer + bytes_read);
         }
       else 
         {
-          /* Read sector into bounce buffer, then partially copy
-             into caller's buffer. */
+          // Read sector into bounce buffer, then partially copy
+             into caller's buffer. 
           if (bounce == NULL) 
             {
               bounce = malloc (BLOCK_SECTOR_SIZE);
@@ -238,7 +243,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
           block_read (fs_device, sector_idx, bounce);
           memcpy (buffer + bytes_read, bounce + sector_ofs, chunk_size);
         }
-      
+			*/
       /* Advance. */
       size -= chunk_size;
       offset += chunk_size;
@@ -281,14 +286,16 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       if (chunk_size <= 0)
         break;
 
+			bc_write(sector_idx, (void *)buffer, bytes_written, chunk_size, sector_ofs);
+			/* 아래 부분은 위에 bc_write를 사용하면서 주석 처리됨
       if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
         {
-          /* Write full sector directly to disk. */
+          // Write full sector directly to disk. 
           block_write (fs_device, sector_idx, buffer + bytes_written);
         }
       else 
         {
-          /* We need a bounce buffer. */
+          // We need a bounce buffer. 
           if (bounce == NULL) 
             {
               bounce = malloc (BLOCK_SECTOR_SIZE);
@@ -296,9 +303,9 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
                 break;
             }
 
-          /* If the sector contains data before or after the chunk
+          // If the sector contains data before or after the chunk
              we're writing, then we need to read in the sector
-             first.  Otherwise we start with a sector of all zeros. */
+             first.  Otherwise we start with a sector of all zeros. 
           if (sector_ofs > 0 || chunk_size < sector_left) 
             block_read (fs_device, sector_idx, bounce);
           else
@@ -306,7 +313,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
           memcpy (bounce + sector_ofs, buffer + bytes_written, chunk_size);
           block_write (fs_device, sector_idx, bounce);
         }
-
+				*/
       /* Advance. */
       size -= chunk_size;
       offset += chunk_size;
