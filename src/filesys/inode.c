@@ -223,27 +223,26 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
 
 			bc_read(sector_idx, (void *)buffer, bytes_read, chunk_size, sector_ofs);
 
-			/*
-			아래는 bc_read구현으로 주석 처리함
       if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
         {
           // Read full sector directly into caller's buffer. 
-          block_read (fs_device, sector_idx, buffer + bytes_read);
+          //block_read (fs_device, sector_idx, buffer + bytes_read);
+					bc_read(sector_idx, (void *)buffer, bytes_read, chunk_size, sector_ofs);
         }
       else 
         {
           // Read sector into bounce buffer, then partially copy
-             into caller's buffer. 
+          // into caller's buffer. 
           if (bounce == NULL) 
             {
               bounce = malloc (BLOCK_SECTOR_SIZE);
               if (bounce == NULL)
                 break;
             }
-          block_read (fs_device, sector_idx, bounce);
+         // block_read (fs_device, sector_idx, bounce);
+					bc_read(sector_idx, (void *)buffer, bytes_read, chunk_size, sector_ofs);
           memcpy (buffer + bytes_read, bounce + sector_ofs, chunk_size);
         }
-			*/
       /* Advance. */
       size -= chunk_size;
       offset += chunk_size;
@@ -286,12 +285,11 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       if (chunk_size <= 0)
         break;
 
-			bc_write(sector_idx, (void *)buffer, bytes_written, chunk_size, sector_ofs);
-			/* 아래 부분은 위에 bc_write를 사용하면서 주석 처리됨
       if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
         {
           // Write full sector directly to disk. 
-          block_write (fs_device, sector_idx, buffer + bytes_written);
+          //block_write (fs_device, sector_idx, buffer + bytes_written);
+					bc_write(sector_idx, (void *)buffer, bytes_written, chunk_size, sector_ofs);
         }
       else 
         {
@@ -304,16 +302,16 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
             }
 
           // If the sector contains data before or after the chunk
-             we're writing, then we need to read in the sector
-             first.  Otherwise we start with a sector of all zeros. 
+          //   we're writing, then we need to read in the sector
+          //   first.  Otherwise we start with a sector of all zeros. 
           if (sector_ofs > 0 || chunk_size < sector_left) 
             block_read (fs_device, sector_idx, bounce);
           else
             memset (bounce, 0, BLOCK_SECTOR_SIZE);
           memcpy (bounce + sector_ofs, buffer + bytes_written, chunk_size);
-          block_write (fs_device, sector_idx, bounce);
+          //block_write (fs_device, sector_idx, bounce);
+					bc_write(sector_idx, (void *)buffer, bytes_written, chunk_size, sector_ofs);
         }
-				*/
       /* Advance. */
       size -= chunk_size;
       offset += chunk_size;
