@@ -11,7 +11,6 @@ void *p_buffer_cache;			// buffer cache를 가리키는 포인터. 동적 할당
 struct buffer_head buffer_head[BUFFER_CACHE_ENTRY_NB];	// buffer head 
 int clock_hand;		// victim을 가리키는 시계바늘
 
-
 // sector_idx를 검색, 데이터를 buffer에 저장
 bool bc_read (block_sector_t sector_idx, void* buffer, 
 							off_t bytes_read, int chunk_size, int sector_ofs) {
