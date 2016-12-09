@@ -25,15 +25,12 @@ enum direct_t {
 };
 
 struct sector_location {
-	int directness;			// 접근 방법, 1단계? 2단계이런것
-	// index는 총 2개가 필요하다. direct, indirect는 하나씩이면 해당
-	// 블럭의 위치를 알 수 있지만, double-indirect같은 경우는 두 번
-	// 다리를 건너야 하므로
-	int index1;					// 1번 용 인덱스
-	int index2;					// 2번 용 인덱스
+	int directness;			// 접근 방법, 직접, 1단계 2단계이런것
+	int index1;					// index block용 인덱스
+	int index2;					// 2번 index block용 인덱스
 };
 
-// 1단계 인덱싱 용 구조체
+// index block을 위한 구조체
 struct inode_indirect_block {
 	block_sector_t map_table[INDIRECT_BLOCK_ENTRIES];
 };
@@ -42,6 +39,8 @@ struct inode_indirect_block {
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 // 아래 자료구조는 extendible file과제를 수행하며 변경됨
+// 자료 구조의 크기는 항상 블럭 사이즈이며
+// 그를 위해 DIRECT_BLOCK_ENTRIES는 바뀔 수 있음
 struct inode_disk
   {
     off_t length;                       /* File size in bytes. */
@@ -78,15 +77,13 @@ static bool register_sector(struct inode_disk *, block_sector_t, struct sector_l
 static bool inode_update_file_length(struct inode_disk *, off_t, off_t);
 static void free_inode_sectors(struct inode_disk *);
 
-
-
-
-
 /* Returns the block device sector that contains byte offset POS
    within INODE.
    Returns -1 if INODE does not contain data for a byte at offset
    POS. */
 // pos로 inode_disk를 검색하여 sector번호를 리턴
+// pos를 잘못 전달 받았으면 -1을 리턴함
+// pos는 byte단위 offset
 static block_sector_t
 byte_to_sector (const struct inode_disk *inode_disk, off_t pos) 
 {
@@ -94,8 +91,8 @@ byte_to_sector (const struct inode_disk *inode_disk, off_t pos)
 	block_sector_t result_sec;			// 리턴할 sector번호
 
 	if(pos < inode_disk->length) {
-		struct inode_indirect_block ind_block;		// 1차
-		struct inode_indirect_block ind_block2;		// 2차
+		struct inode_indirect_block index_block;		// 1차
+		struct inode_indirect_block index_block2;		// 2차
 		struct sector_location sec_loc;
 		locate_byte(pos, &sec_loc);		// 인덱스 블록의 offset계산
 
@@ -108,24 +105,24 @@ byte_to_sector (const struct inode_disk *inode_disk, off_t pos)
 			case INDIRECT :
 				// ind_block에 index block의 값을 읽고, 거기서 찾아서 리턴
 				bc_read(inode_disk->indirect_block_sec,
-							 &ind_block, 0, BLOCK_SECTOR_SIZE, 0);
-				result_sec = ind_block.map_table[sec_loc.index1];
+							 &index_block, 0, BLOCK_SECTOR_SIZE, 0);
+				result_sec = index_block.map_table[sec_loc.index1];
 				break;
 
 			case DOUBLE_INDIRECT :
 				// ind_block에 index_block을 읽음
 				bc_read(inode_disk->indirect_block_sec,
-							 &ind_block, 0, BLOCK_SECTOR_SIZE, 0);
+							 &index_block, 0, BLOCK_SECTOR_SIZE, 0);
 				// ind_block2에 2번째 index_block을 읽음
-				bc_read(ind_block.map_table[sec_loc.index1],
-							 &ind_block2, 0, BLOCK_SECTOR_SIZE, 0);
-				result_sec = ind_block2.map_table[sec_loc.index2];
+				bc_read(index_block.map_table[sec_loc.index1],
+							 &index_block2, 0, BLOCK_SECTOR_SIZE, 0);
+				result_sec = index_block2.map_table[sec_loc.index2];
 				break;
 			default :
 				return -1;		// directness값의 오류
 		}		// end of switch
 	} //  end of if
-	else {
+	else {	// 잘못된 pos입력
 		return -1;
 	}
 	return result_sec;
@@ -167,28 +164,14 @@ inode_create (block_sector_t sector, off_t length)
       disk_inode->magic = INODE_MAGIC;
 			// lenght만큼 하나 만들고, bc_write로 기록
 			if(length > 0) {
+				// 아래 함수의 2, 3번째 인자는 항상 [,]임이 보장되어야함
+				// 그러므로 length - 1을 전달해줌
 				inode_update_file_length(disk_inode, 0, length - 1);
 			}
 			bc_write(sector, (void*)disk_inode, 0, BLOCK_SECTOR_SIZE, 0);
-			free(disk_inode);
 			success = true;
-			/*
-      if (free_map_allocate (sectors, &disk_inode->start)) 
-        {
-          block_write (fs_device, sector, disk_inode);
-          if (sectors > 0) 
-            {
-              static char zeros[BLOCK_SECTOR_SIZE];
-              size_t i;
-              
-              for (i = 0; i < sectors; i++) 
-                block_write (fs_device, disk_inode->start + i, zeros);
-            }
-          success = true; 
-        } 
-      free (disk_inode);
-			*/
     }
+	free(disk_inode);
   return success;
 }
 
@@ -269,10 +252,9 @@ inode_close (struct inode *inode)
 					get_disk_inode(inode, &disk_inode);
 					//on disk inode에할당된 모든 블럭을 해제 
 					free_inode_sectors(&disk_inode);			
-					// on disk inode를 해제
+					// on disk inode 그 자체를 해제
 					free_map_release(inode->sector, 1);
         }
-
       free (inode); 
     }
 }
@@ -294,10 +276,10 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
 {
   uint8_t *buffer = buffer_;
   off_t bytes_read = 0;
-	// 수업자료에는 동적할당이지만 free자신이 없어서 그냥 함
+	// 인자로 받은 inode에 대한 on disk inode를 읽어옴
 	struct inode_disk disk_inode;
-
 	get_disk_inode(inode, &disk_inode);
+
   while (size > 0) 
     {
       /* Disk sector to read, starting byte offset within sector. */
@@ -343,16 +325,15 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   if (inode->deny_write_cnt)
     return 0;
 
-	// on_disk_inode를 읽음
-	// 이러면 이제 disk_inode라는 변수를 마음대로 사용할 수 있음.
-	// 본 함수에서 새로 생성했으나, 값이 같기 때문에
 	// inode lock 획득
 	lock_acquire(&inode->extend_lock);
+	// 인자로 받은 inode에 대한 on disk inode를 읽어옴
 	get_disk_inode(inode, &disk_inode);
 
-	int old_length = disk_inode.length;			// 원래 파일 길이
-	int write_end = offset + size - 1;			// 새로운 파일의 끝
+	int old_length = disk_inode.length;			// on disk inode에 저장된 기존 파일 길이
+	int write_end = offset + size - 1;			// 새로운 파일의 끝(파일의 길이 - 1)
 	if(write_end > old_length - 1) {				// 파일의 길이가 길어진다면
+		// inode업데이트
 		inode_update_file_length(&disk_inode, old_length, write_end);
 		bc_write(inode->sector, (void *)&disk_inode, 0, BLOCK_SECTOR_SIZE, 0);
 	}
@@ -426,23 +407,27 @@ static bool get_disk_inode(const struct inode *inode,
 }
 
 // 디스크 블록 접근 방법(direct냐 indirect냐 double-indirect냐)결정
-// 인자로 받은 sec_loc의 값들을 설정하는 것이라고 보면 됨
+// 그 결과를 sec_loc에 저장(접근 방법, 접근 index들)
 static void locate_byte(off_t pos, struct sector_location *sec_loc) {
 	off_t pos_sector = pos / BLOCK_SECTOR_SIZE;	// 바이트 단위 -> 블럭 단위
 
 	// 0단계에서 끝날 지 검사
 	if(pos_sector < DIRECT_BLOCK_ENTRIES) {
-		// 0단계라고 기록, index1에 현재 블럭(현재의 인덱스)를 기록
+		// 0단계라고 기록, index1에 저장
 		sec_loc->directness = NORMAL_DIRECT;
 		sec_loc->index1 = pos_sector;
 	}
+	// 1단계 이면...
 	else if(pos_sector < (off_t)DIRECT_BLOCK_ENTRIES + 
 											  INDIRECT_BLOCK_ENTRIES) {
+		// 1단계라고 기록, index1에 저장
 		sec_loc->directness = INDIRECT;
 		sec_loc->index1 = pos_sector - DIRECT_BLOCK_ENTRIES;
 	}
+	// 2단계 이면...
 	else if(pos_sector < (off_t)DIRECT_BLOCK_ENTRIES + 
 											  INDIRECT_BLOCK_ENTRIES * (INDIRECT_BLOCK_ENTRIES + 1)) {
+		// 1단계라고 기록, index1, index2에 모두 저장
 		sec_loc->directness = DOUBLE_INDIRECT;
 		sec_loc->index1 = (pos_sector - (DIRECT_BLOCK_ENTRIES +
 																		 INDIRECT_BLOCK_ENTRIES)) /
@@ -451,12 +436,14 @@ static void locate_byte(off_t pos, struct sector_location *sec_loc) {
 																		 INDIRECT_BLOCK_ENTRIES)) %
 																		 INDIRECT_BLOCK_ENTRIES;
 	}
+	// 잘못된 pos의 입력...
 	else {
 		sec_loc->directness = OUT_LIMIT;
 	}
 }
 
 // 인자로 받은 inode_disk에 new_sector를 update
+// indirect block을 처음 사용하는 경우 블럭을 만들기도 함
 static bool register_sector(struct inode_disk *inode_disk, 
 														block_sector_t new_sector, 
 														struct sector_location sec_loc) {
@@ -485,12 +472,12 @@ static bool register_sector(struct inode_disk *inode_disk,
 				}
 			}
 			// indirect_index_block은 만들어진 상태.
-			bc_read(inode_disk->indirect_block_sec,  // 해당 인덱스 블럭의 값을 읽고
+			// 아래는 해당 블럭을 반영하는 과정인데, 블럭 단위로 읽고 씀
+			// 해당 인덱스 블럭의 값을 읽고
+			bc_read(inode_disk->indirect_block_sec,  
 						 &block1, 0, BLOCK_SECTOR_SIZE, 0);
-			// 갱신하고(sec_loc.index1에 new_sector를 넣고)
+			// on disk inode에 그 값을 반영
 			block1.map_table[sec_loc.index1] = new_sector;
-			// 다시 쓰면 됨. 단 전부 다 쓸 필요는 없고 해당 섹터만 변경
-			// 하면 될 듯함. 일단 동작 확인 후 고치기
 			bc_write(inode_disk->indirect_block_sec,
 							&block1, 0, BLOCK_SECTOR_SIZE, 0);
 			break;
@@ -544,6 +531,7 @@ static bool register_sector(struct inode_disk *inode_disk,
 // 파일의 inode, 커져야하는 시작 오프셋, 커지고 그 끝의 오프셋
 // 이렇게 인자로 받음.
 // [start_pos, end_pos]인 구간임
+// 위의 닫힌 구간에 대한 조건이 지켜지지 않으면 우울해 질 수 있음
 static bool inode_update_file_length(struct inode_disk *inode_disk, 
 																		 off_t start_pos, off_t end_pos) {
 	block_sector_t sector_index;		// 현재 작업중인 블럭의 sector 번호
@@ -559,7 +547,8 @@ static bool inode_update_file_length(struct inode_disk *inode_disk,
 	while(size > 0) {
 		// 지금 작업중인 블럭의 offset
 		int sector_ofs = offset % BLOCK_SECTOR_SIZE;
-		// while_loop의 동작을 위한 것.
+
+		// 아래의 chunk_size는 size, offset변수의 업데이트를 위한 것
 		// 예를들어, 현재 블럭에 500 만큼 쓰여있으면, chunk_size는
 		// 12가 됨.
 		// 예를 들어, 현재 블럭에 0만큼 쓰여있으면(새로 할당해야함),
@@ -569,9 +558,9 @@ static bool inode_update_file_length(struct inode_disk *inode_disk,
 			// 이미 할당된 블럭. 아무 일도 하지 않음.
 			// 밑에서 while문 관련 index는 증가시킬 것임
 		}
-		else {	// 새로운 블럭을 할당해야할 필요가 있음.
+		else {	// 새로운 블럭을 할당해야할 필요가 있음. sector_ofs이 0이기 때문에
 			if(true == free_map_allocate(1, &sector_index)) {
-				// 블럭은 만들었는데 이제 이것을 inode_disk에 넣어야함
+				// 블럭은 만들었는데 이제 이것을 on disk inode에 넣어야함
 				locate_byte(offset, &sec_loc);
 				register_sector(inode_disk, sector_index, sec_loc);
 			}
@@ -588,14 +577,14 @@ static bool inode_update_file_length(struct inode_disk *inode_disk,
 		offset += chunk_size;
 	} // end of while
 
-	free(zeroes);		// 잘 쓴 zeores를 해방
+	free(zeroes);		// 잘 쓴 zeores를 이제 놓아줍니다
 	return true;
 }
 
 
 // 인자로 받은 inode_disk에 할당된 모든 블럭을 해제
 static void free_inode_sectors(struct inode_disk *inode_disk) {
-	int i, j;
+	int i, j;			// 반복 제어 변수
 	// double indirect부터
 	if(inode_disk->double_indirect_block_sec > 0) {	// 0보다 크면 존재
 		struct inode_indirect_block block1;		// 1st index block
