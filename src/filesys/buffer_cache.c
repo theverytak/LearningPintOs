@@ -11,7 +11,13 @@ void *p_buffer_cache;			// buffer cache를 가리키는 포인터. 동적 할당
 struct buffer_head buffer_head[BUFFER_CACHE_ENTRY_NB];	// buffer head 
 int clock_hand;		// victim을 가리키는 시계바늘
 
-// sector_idx를 검색, 데이터를 buffer에 저장
+
+
+// buffer_cache에서 sector_idx에 해당하는 내용을 읽어서 buffer에 저장
+// 만약 없다면 디스크에서 읽어서 buffer_cache에 저장하고 buffer에 저장
+// bytes_read : buffer의 시작 offset
+// chunk_size : 해당 섹터를 얼마나 읽을지
+// sector_of : 해당 섹터에서의 offset
 bool bc_read (block_sector_t sector_idx, void* buffer, 
 							off_t bytes_read, int chunk_size, int sector_ofs) {
 	bool success = false;			// 반환 용 값. 성공, 실패를 반환
@@ -24,8 +30,8 @@ bool bc_read (block_sector_t sector_idx, void* buffer,
 		target->valid = true;
 		target->dirty = false;
 		target->sector = sector_idx;
-		// 아래 block_read의 용법은 write->file_write->inode_write_at을 볼것
-		// data를 버퍼에 읽음
+		// sector_idx에 해당하는 블럭의 내용을 읽음
+		// buffer_cache에 저장하는 과정
 		block_read(fs_device, sector_idx, target->data);
 	}
 	// 버퍼 캐시에 넣은 데이터를(이 함수에서 넣었든 원래 있었든) 함수의 두
@@ -37,7 +43,7 @@ bool bc_read (block_sector_t sector_idx, void* buffer,
 	return success;
 }
 
-// 위에 구현한 bc_read와 똑같음
+// bc_read와 반대
 bool bc_write (block_sector_t sector_idx, void* buffer, 
 							 off_t bytes_written, int chunk_size, int sector_ofs) {
 	bool success = false;			// 반환 용 값. 성공, 실패를 반환
@@ -50,8 +56,8 @@ bool bc_write (block_sector_t sector_idx, void* buffer,
 		target->valid = true;
 		target->dirty = false;
 		target->sector = sector_idx;
-		// 아래 block_read의 용법은 write->file_write->inode_write_at을 볼것
-		// data를 버퍼에 읽음
+		// sector_idx에 해당하는 블럭의 내용을 읽음
+		// buffer_cache에 저장하는 과정
 		block_read(fs_device, sector_idx, target->data);
 	}
 	// 버퍼 캐시에 넣은 데이터를(이 함수에서 넣었든 원래 있었든) 함수의 두
