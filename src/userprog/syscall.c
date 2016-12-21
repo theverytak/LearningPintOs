@@ -1,4 +1,7 @@
 #include "userprog/syscall.h"
+#include "threads/palloc.h"
+#include "threads/vaddr.h"
+#include "string.h"
 #include <stdio.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
@@ -6,13 +9,11 @@
 #include "devices/shutdown.h" // shutdown_power_off()
 #include "devices/input.h"		// input_getc()
 #include "filesys/filesys.h"  // filesys_create(), remove()
+#include "filesys/directory.h"
+#include "filesys/inode.h"
 #include "filesys/file.h"			// file_close(), file_read(), file_write(), 
 															//file_seek(), file_tell(), file_length()
 #include "userprog/process.h" // process_execute(), process_wait()
-
-
-static void syscall_handler (struct intr_frame *f UNUSED);
-
 
 // 아래는 구현한 시스템컬의 목록임.
 void halt(void);
@@ -28,6 +29,14 @@ int write(int fd, void *buffer, unsigned size);
 void seek(int fd, unsigned position); 
 unsigned tell(int fd);
 void close(int fd);
+bool isdir(int fd);
+bool readdir(int fd, char *name);
+bool chdir(const char *dir);
+bool mkdir(const char *dir);
+int inumber(int fd);
+
+
+static void syscall_handler (struct intr_frame *f UNUSED);
 
 void
 syscall_init (void) 
@@ -157,6 +166,39 @@ syscall_handler (struct intr_frame *f UNUSED)
 				close(arg[0]);
 				break;
 			}
+		 case SYS_MKDIR:
+			{
+				get_argument(esp, arg, 1);
+				check_address((void *)arg[0]);
+				f->eax = mkdir((const char *) arg[0]);
+				break;
+			}
+		 case SYS_CHDIR:
+			{
+				get_argument(esp, arg, 1);
+				check_address((void *)arg[0]);
+				f->eax = chdir((const char *) arg[0]);
+				break;
+			}
+		 case SYS_READDIR:
+			{
+				get_argument(esp, arg, 2);
+				check_address((void *)arg[1]);
+				f->eax = readdir((int) arg[0], (char *) arg[1]);
+				break;
+			}
+		 case SYS_ISDIR:
+			{
+				get_argument(esp, arg, 1);
+				f->eax = isdir ((int) arg[0]);
+				break;
+			}
+		 case SYS_INUMBER:
+			{
+				get_argument(esp, arg, 1);
+				f->eax = inumber ((int) arg[0]);
+				break;
+			}
 	}
 
 //  printf ("system call!\n");
@@ -167,8 +209,7 @@ syscall_handler (struct intr_frame *f UNUSED)
  경계는 제외.
  esp를 검사할 때 뿐만 아니라 예를들어 인자로 포인터를 받아온 경우에도
  아래 함수를 사용가능. */
-void 
-check_address(void *addr) 
+void check_address(void *addr) 
 {
 	if((uint32_t)addr <= 0x8048000 || (uint32_t)addr >= 0xc0000000) 
 		exit(-1);
@@ -178,8 +219,7 @@ check_address(void *addr)
 // 유저 스택에 저장된 인자값들을 arg에 복사.
 // 참고로 핀토스 시스템콜의 최대 인자 수는 3개. read, write의 인자가 3개이다.
 // 그러므로, count가 3보다 작거나 같다고  생각하고 만듬.
-void 
-get_argument(void *esp, int *arg, int count)
+void get_argument(void *esp, int *arg, int count)
 {
 	int i;		// for loop;
 	// 스택에 있는 인자들을 가리킴. 현재 esp는 system call number이므로
@@ -208,7 +248,7 @@ get_argument(void *esp, int *arg, int count)
  여기서부터는 구현된 시스템컬을 목록입니다. 
  **************************************** */
 void 
-halt()
+halt(void)
 {
 	shutdown_power_off();
 }
@@ -358,7 +398,8 @@ write(int fd, void *buffer, unsigned size) {
 
 	// 0, 1모두 아니면 파일객체 탐색 후 실패했으면 -1리턴
 	write_target = process_get_file(fd);
-	if(NULL == write_target) {
+	// dir에 write시스템콜을 이용해 쓰기 방지
+	if(NULL == write_target || inode_is_dir(file_get_inode(write_target))) {
 		lock_release(&filesys_lock);
 		return -1;
 	}
@@ -396,3 +437,91 @@ void
 close(int fd) {
 	process_close_file(fd);
 }
+
+// fd가 dir인지 아닌지 판단
+bool isdir(int fd) {
+	// fd의 file구조체를 찾고
+	struct file *target_file = process_get_file(fd);
+	struct inode *target_inode;
+
+	// 없으면 거짓
+	if(NULL == target_file)
+		return false;
+
+	// file구조체의 inode를 찾아서
+	target_inode = file_get_inode(target_file);
+	// inode가 dir인지 리턴
+	return inode_is_dir(target_inode);
+}
+
+// fd의 dir_entry읽어서 name에 저장
+// 엔트리가 없으면 false 반환
+bool readdir(int fd, char *name) {
+	// fd의 file구조체를 찾고
+	struct file *target_file = process_get_file(fd);
+	struct inode *target_inode;
+
+	// 없으면 거짓
+	if(NULL == target_file)
+		return false;
+
+	// file구조체의 inode를 찾아서
+	target_inode = file_get_inode(target_file);
+	// 해당 inode가 dir가 아니면 실패
+	if(false == inode_is_dir(target_inode))
+		return false;
+
+	struct dir *dir = dir_open(target_inode);
+	if(!dir)
+		return false;
+	if(false == dir_readdir(dir, name)) {	// 더이상 엔트리가 없으면
+		dir_close(dir);
+		return false;
+	}
+	return true;
+}
+
+// 현재 작업 디렉터리를 dir로 변경
+bool chdir(const char *dir) {
+	bool success = false;
+	char *cp_name = palloc_get_page(0);
+	char *file_name = palloc_get_page(0);
+	if(cp_name == NULL || file_name == NULL) {
+		return false;
+	}
+	strlcpy(cp_name, dir, PGSIZE);		// 이제 cp_name은 경로임
+	struct dir *new_dir = parse_path(cp_name, file_name);
+	if(NULL == new_dir)
+		return false;
+	// new_dir안의 file_name을 가진 디렉터리가 타깃임
+	struct inode *inode;
+	if(dir_lookup(new_dir, file_name, &inode)) {	// file_name탐색
+		dir_close(thread_current()->cur_dir);
+		thread_current()->cur_dir = dir_open(inode);
+		success = true;
+	}
+
+	dir_close(new_dir);
+	palloc_free_page(cp_name);
+	palloc_free_page(file_name);
+
+	return success;
+}
+
+// 이름이 dir인 디렉터리 하나 생성
+// 이미 동일한 이름이 있으면 실패
+bool mkdir(const char *dir) {
+	return filesys_create_dir(dir);
+}
+
+// fd의 on disk inode 블럭 주소를 반환
+int inumber(int fd) {
+	struct file *target_file = process_get_file(fd);
+	if(NULL == target_file)
+		return -1;
+
+	return inode_get_inumber(file_get_inode(target_file));
+}
+
+
+

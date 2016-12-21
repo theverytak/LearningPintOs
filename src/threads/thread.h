@@ -103,6 +103,7 @@ struct thread
 		struct file **fdt;									// 파일디스크립터 테이블 포인터
 		struct file *run_file;							// 현재 실행중인 파일구조체
 		int next_fd;												// 다음 할당할 테이블 주소. 시작값은 2
+		struct dir *cur_dir;									// 해당 스레드의 작업 디렉터리
 #ifdef USERPROG
 		/* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */

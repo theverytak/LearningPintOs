@@ -14,7 +14,7 @@
 // BLOCK_SECTOR_SIZE / sizeof(block_secotr_t) == 512 / 4
 #define INDIRECT_BLOCK_ENTRIES 128
 // inode_disk 구조체의 크기가 1블럭이 되도록 하는 값
-#define DIRECT_BLOCK_ENTRIES 124
+#define DIRECT_BLOCK_ENTRIES 123
 
 // inode가 블럭을 저장하는 방식
 enum direct_t {
@@ -45,6 +45,7 @@ struct inode_disk
   {
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
+		uint32_t is_dir;										// dir이면 1 아니면 0
 		block_sector_t direct_map_table[DIRECT_BLOCK_ENTRIES];	// 0단계
 		block_sector_t indirect_block_sec;											// 1단계
 		block_sector_t double_indirect_block_sec;								// 2단계
@@ -145,7 +146,7 @@ inode_init (void)
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
 bool
-inode_create (block_sector_t sector, off_t length)
+inode_create (block_sector_t sector, off_t length, uint32_t is_dir)
 {
   struct inode_disk *disk_inode = NULL;
   bool success = false;
@@ -162,6 +163,7 @@ inode_create (block_sector_t sector, off_t length)
       //size_t sectors = bytes_to_sectors (length);
       disk_inode->length = length;
       disk_inode->magic = INODE_MAGIC;
+			disk_inode->is_dir = is_dir;		// is_dir초기화
 			// lenght만큼 하나 만들고, bc_write로 기록
 			if(length > 0) {
 				// 아래 함수의 2, 3번째 인자는 항상 [,]임이 보장되어야함
@@ -642,3 +644,14 @@ static void free_inode_sectors(struct inode_disk *inode_disk) {
 	}
 }
 
+// 인자로 받은 inode에 해당하는 파일이 dir인가 아닌가
+bool inode_is_dir (const struct inode *inode) {
+	bool result;
+	struct inode_disk disk_inode;
+
+	// on disk inode를 읽어옴
+	get_disk_inode(inode, &disk_inode);
+	result = disk_inode.is_dir;
+
+	return result;
+}

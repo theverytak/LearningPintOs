@@ -193,6 +193,8 @@ process_exit (void)
 
 	// file_close여기서 한다.
 	file_close(cur->run_file);
+	// 현재 디렉터리를 닫음
+	dir_close(cur->cur_dir);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
